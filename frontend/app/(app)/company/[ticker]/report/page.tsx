@@ -1,67 +1,150 @@
-import { Badge } from "@/components/ui/Badge"
-import { Button } from "@/components/ui/Button"
+"use client";
 
-export default function AIReportPage({ params }: { params: { ticker: string } }) {
-  const ticker = params.ticker || "SMCI";
+import React from "react";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { RecommendationBox } from "@/components/modules/RecommendationBox";
+
+export default function ReportPage({ params }: { params: { ticker: string } }) {
+  const ticker = params.ticker || "WDI.DE";
 
   return (
-    <div className="mx-auto max-w-[760px] px-6 py-16">
-      {/* Header */}
-      <div className="mb-12 border-b border-border pb-8">
-        <div className="mb-6 text-[11px] font-medium uppercase tracking-wider text-secondary">
-          AI Forensic Report
-        </div>
-        <h1 className="mb-4 font-serif text-4xl text-primary">Super Micro Computer, Inc.</h1>
-        <div className="flex items-center gap-4 text-sm text-secondary">
-          <span>June 9, 2025</span>
-          <span>•</span>
+    <div className="w-full flex justify-center mt-8 pb-16">
+      <div className="w-full max-w-[760px] flex flex-col">
+        
+        {/* PAGE HEADER */}
+        <div className="mb-8">
+          <div className="font-sans text-[10px] font-medium uppercase tracking-[0.08em] text-[#7A786F] mb-3">
+            AI FORENSIC REPORT
+          </div>
+          <h1 className="font-sans text-[24px] font-semibold text-[#1A1A18] mb-2">Wirecard AG</h1>
+          
+          <div className="flex items-center gap-2 mb-3">
+            <span className="font-mono text-[12px] text-[#7A786F]">{ticker === "WDI.DE" ? "WDI.DE" : ticker}</span>
+            <span className="text-[#E3DFD8]">·</span>
+            <span className="font-sans text-[12px] text-[#7A786F]">Generated June 9, 2025</span>
+            <span className="text-[#E3DFD8]">·</span>
+            <span className="font-sans text-[12px] text-[#7A786F]">Analysis #2891</span>
+          </div>
+
           <div className="flex items-center gap-2">
-            <span>Integrity Score:</span>
-            <span className="font-mono font-medium text-risk-moderate">42/100</span>
-            <Badge risk="moderate">Moderate Risk</Badge>
+            <span className="font-mono text-[13px] font-medium text-[#B03028]">22 / 100</span>
+            <Badge risk="high">HIGH RISK</Badge>
           </div>
         </div>
-      </div>
 
-      {/* Body */}
-      <div className="prose prose-sm md:prose-base prose-neutral max-w-none text-primary">
-        <h3 className="text-lg font-semibold mb-4 uppercase text-[12px] tracking-wider text-secondary">Key Concerns</h3>
-        <ul className="list-disc pl-5 mb-8 space-y-2 text-primary leading-relaxed">
-          <li>Operating cash flow continues to lag significantly behind reported net income, suggesting low-quality earnings.</li>
-          <li>Recent resignation of the CFO and replacement of the independent auditing firm raises substantial governance red flags.</li>
-          <li>Inventory levels have spiked <span className="font-mono">43%</span> year-over-year while revenue growth decelerated.</li>
-        </ul>
+        <div className="w-full h-[1px] bg-[#E3DFD8] mb-8" />
 
-        <h3 className="text-lg font-semibold mb-4 mt-8 uppercase text-[12px] tracking-wider text-secondary">Financial Analysis</h3>
-        <p className="mb-4 leading-relaxed">
-          The primary driver of the lowered integrity score is the growing divergence between recognized revenue and cash generated from operations. In Q1 2024, the company reported <span className="font-mono">$3.85B</span> in revenue (a <span className="font-mono">12%</span> YoY increase), but operating cash flow was negative <span className="font-mono">-$125M</span>. 
-        </p>
-        <p className="mb-8 leading-relaxed">
-          Furthermore, Days Sales Outstanding (DSO) has stretched from <span className="font-mono">42</span> days to <span className="font-mono">68</span> days over the last three quarters, indicating potential issues with receivables collection or aggressive revenue recognition practices.
-        </p>
+        {/* REPORT BODY SECTIONS */}
+        <div className="flex flex-col gap-10 font-sans text-[15px] text-[#1A1A18] leading-[1.8]">
+          
+          <section>
+            <div className="font-sans text-[10px] font-medium uppercase tracking-[0.08em] text-[#7A786F] mb-1">
+              EXECUTIVE SUMMARY
+            </div>
+            <h2 className="font-sans text-[16px] font-semibold text-[#1A1A18] mb-3">
+              Executive Summary
+            </h2>
+            <p>
+              Wirecard AG presents a Corporate Integrity Score of 22 out of 100, placing it in the High Risk category. The investigation identified critical divergences between reported financial performance and underlying cash generation, alongside three significant governance events within a 24-month window.
+            </p>
+          </section>
 
-        <h3 className="text-lg font-semibold mb-4 mt-8 uppercase text-[12px] tracking-wider text-secondary">Governance Observations</h3>
-        <p className="mb-8 leading-relaxed">
-          Governance metrics have deteriorated significantly. The unexpected departure of the Chief Financial Officer right before the annual audit, followed by the immediate replacement of the auditing firm, historically correlates with a high probability of accounting restatements. 
-        </p>
+          <section>
+            <div className="font-sans text-[10px] font-medium uppercase tracking-[0.08em] text-[#7A786F] mb-1">
+              KEY CONCERNS
+            </div>
+            <h2 className="font-sans text-[16px] font-semibold text-[#1A1A18] mb-3">
+              Key Concerns
+            </h2>
+            <ul className="flex flex-col gap-2 font-sans text-[14px] text-[#1A1A18] leading-[1.75]">
+              <li className="flex"><span className="text-[#B0ADA7] mr-2">—</span><span>Operating cash flow declined for four consecutive quarters while net income was reported as positive.</span></li>
+              <li className="flex"><span className="text-[#B0ADA7] mr-2">—</span><span>CFO resigned in Q2 2022 with no successor named for 90 days.</span></li>
+              <li className="flex"><span className="text-[#B0ADA7] mr-2">—</span><span>Auditor replaced in Q3 2022, two quarters after a qualified opinion.</span></li>
+              <li className="flex"><span className="text-[#B0ADA7] mr-2">—</span><span>Revenue-to-receivables ratio expanded <span className="font-mono text-[13px]">2.8×</span> in 18 months.</span></li>
+              <li className="flex"><span className="text-[#B0ADA7] mr-2">—</span><span>Management guidance revised downward twice in the same fiscal year.</span></li>
+              <li className="flex"><span className="text-[#B0ADA7] mr-2">—</span><span>SEC initiated an informal inquiry in November 2023.</span></li>
+            </ul>
+          </section>
 
-        <h3 className="text-lg font-semibold mb-4 mt-8 uppercase text-[12px] tracking-wider text-secondary">Narrative Review</h3>
-        <p className="mb-12 leading-relaxed">
-          Management tone remains relatively consistent. However, during the recent earnings call Q&A, executives deflected three direct questions regarding the timeline for cash flow normalization, shifting the topic to total addressable market (TAM) expansion.
-        </p>
-      </div>
+          <section>
+            <div className="font-sans text-[10px] font-medium uppercase tracking-[0.08em] text-[#7A786F] mb-1">
+              FINANCIAL ANALYSIS
+            </div>
+            <h2 className="font-sans text-[16px] font-semibold text-[#1A1A18] mb-3">
+              Financial Analysis
+            </h2>
+            <p>
+              Net income of <span className="font-mono text-[14px]">€415M</span> in FY2022 was accompanied by operating cash outflow of <span className="font-mono text-[14px]">€112M</span> — a divergence of <span className="font-mono text-[14px]">€527M</span> that is inconsistent with the reported margin profile. This represents the widest gap between accrual earnings and cash realization in the company's public history.
+            </p>
+          </section>
 
-      {/* Recommendation Box */}
-      <div className="my-12 border border-border bg-surface p-6 rounded-card">
-        <p className="text-sm font-medium text-primary">
-          Further investigation is advised before making investment or credit decisions. The combination of declining cash flow quality and auditor replacement warrants caution.
-        </p>
-      </div>
+          <section>
+            <div className="font-sans text-[10px] font-medium uppercase tracking-[0.08em] text-[#7A786F] mb-1">
+              GOVERNANCE OBSERVATIONS
+            </div>
+            <h2 className="font-sans text-[16px] font-semibold text-[#1A1A18] mb-3">
+              Governance Observations
+            </h2>
+            <p>
+              The departure of the CFO in April 2022 was followed by a change in auditors in September 2022. This sequencing of executive turnover followed by audit rotation is historically correlated with elevated financial restatement probability.
+            </p>
+          </section>
 
-      {/* Footer / Export */}
-      <div className="flex justify-end pt-8">
-        <Button variant="secondary">Export PDF Report</Button>
+          <section>
+            <div className="font-sans text-[10px] font-medium uppercase tracking-[0.08em] text-[#7A786F] mb-1">
+              NARRATIVE REVIEW
+            </div>
+            <h2 className="font-sans text-[16px] font-semibold text-[#1A1A18] mb-3">
+              Narrative Review
+            </h2>
+            <p className="mb-6">
+              Linguistic analysis of management commentary reveals significant deterioration in forward-looking sentiment.
+            </p>
+            
+            <div className="flex flex-col gap-6 pl-4 border-l-2 border-[#E3DFD8]">
+              <div>
+                <div className="font-mono text-[11px] text-[#7A786F] mb-1">Q2 2022</div>
+                <p className="italic font-sans text-[14px] text-[#1A1A18]">"We reaffirm full-year revenue guidance of €5.4B with high confidence."</p>
+              </div>
+              <div>
+                <div className="font-mono text-[11px] text-[#7A786F] mb-1">Q4 2022</div>
+                <p className="italic font-sans text-[14px] text-[#1A1A18]">"Given evolving market conditions, we are withdrawing forward guidance for FY2023."</p>
+              </div>
+            </div>
+          </section>
+
+        </div>
+
+        <div className="w-full h-[1px] bg-[#E3DFD8] my-10" />
+
+        {/* RECOMMENDATION BOX */}
+        <div className="mb-10">
+          <RecommendationBox 
+            variant="action"
+            label="INVESTIGATION RECOMMENDED"
+            body="Patterns detected in this analysis are consistent with known precursors to material financial misstatement. Independent due diligence and review of primary source filings is strongly advised before any investment or credit decision."
+          />
+        </div>
+
+        {/* DISCLAIMER */}
+        <div className="mb-12">
+          <p className="font-sans text-[11px] text-[#B0ADA7] italic text-center leading-relaxed">
+            This report is generated from publicly available information using AI-assisted forensic analysis. It does not constitute financial advice, legal opinion, or a finding of fraud. All conclusions are probabilistic and subject to the limitations of available data.
+          </p>
+        </div>
+
+        {/* PAGE ACTIONS */}
+        <div className="flex justify-end items-center gap-4">
+          <button className="font-sans text-[13px] text-[#1C3558] hover:underline px-4">
+            Share Report
+          </button>
+          <Button variant="secondary">
+            Export PDF
+          </Button>
+        </div>
+
       </div>
     </div>
-  )
+  );
 }

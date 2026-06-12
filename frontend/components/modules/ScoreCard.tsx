@@ -21,7 +21,7 @@ function getScoreColor(score: number) {
 export function ModuleScoreCard({ label, score, summary, href = "#", loading }: ModuleScoreCardProps) {
   if (loading) {
     return (
-      <Card className="w-full md:w-[260px] h-[160px] p-4 flex flex-col justify-between border-l-[3px] border-l-border">
+      <Card className="w-full md:w-[260px] h-auto md:h-[160px] p-[14px] md:p-4 flex flex-col justify-between border-l-[3px] border-l-border">
         <Skeleton className="w-24 h-3 mb-2" />
         <Skeleton className="w-16 h-10 mb-2" />
         <div className="w-full h-[1px] bg-border my-2" />
@@ -34,13 +34,13 @@ export function ModuleScoreCard({ label, score, summary, href = "#", loading }: 
   const colors = getScoreColor(score);
 
   return (
-    <Card className={`w-full md:w-[260px] h-[160px] flex flex-col justify-between border-l-[3px] ${colors.border}`}>
-      <div className="p-4 flex flex-col h-full">
+    <Card className={`w-full md:w-[260px] h-auto md:h-[160px] flex flex-col justify-between border-l-[3px] ${colors.border}`}>
+      <div className="p-[14px] md:p-4 flex flex-col h-full">
         <div className="font-sans text-[10px] font-medium uppercase tracking-[0.04em] text-text-secondary mb-2 line-clamp-1">
           {label}
         </div>
         <div className="flex items-baseline mb-2">
-          <span className={`font-mono text-[40px] font-bold leading-none ${colors.text}`}>
+          <span className={`font-mono text-[32px] md:text-[40px] font-bold leading-none ${colors.text}`}>
             {score}
           </span>
           <span className="font-mono text-[16px] text-text-secondary ml-1">
@@ -48,10 +48,10 @@ export function ModuleScoreCard({ label, score, summary, href = "#", loading }: 
           </span>
         </div>
         <div className="w-full h-[1px] bg-border mb-3" />
-        <p className="font-sans text-[13px] text-text-primary leading-tight line-clamp-2 mb-auto">
+        <p className="font-sans text-[13px] text-text-primary leading-[1.6] md:leading-tight line-clamp-3 md:line-clamp-2 mb-auto">
           {summary}
         </p>
-        <div className="text-right mt-2">
+        <div className="text-right mt-3 md:mt-2">
           <Link href={href} className="font-sans text-[12px] text-navy font-medium transition-colors hover:text-[#142848]">
             View Details →
           </Link>

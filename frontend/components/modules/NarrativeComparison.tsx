@@ -48,7 +48,7 @@ export function NarrativeComparison({ left, right, contradictionAlert, alertSeve
       </div>
 
       {contradictionAlert && (
-        <div className={`mt-4 pl-4 py-1 border-l-[1px] ${alertSeverity === "severe" ? "border-risk-high" : "border-risk-moderate"}`}>
+        <div className={`mt-4 pl-4 py-1 ${alertSeverity === "severe" ? "border-l-[3px] border-risk-high" : "border-l-[1px] border-risk-moderate"}`}>
           <p className={`font-sans text-[13px] ${alertSeverity === "severe" ? "text-risk-high" : "text-risk-moderate"}`}>
             {contradictionAlert}
           </p>

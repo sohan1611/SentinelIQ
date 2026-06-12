@@ -16,17 +16,7 @@ function getRiskDetails(score: number) {
 }
 
 export function IntegrityScoreGauge({ score, lastAnalyzed, loading }: IntegrityGaugeProps) {
-  const radius = 90; // Desktop SVG radius
-  const circumference = 2 * Math.PI * radius;
-  // 270 degree sweep = 75% of circle
-  const dasharray = `${circumference * 0.75} ${circumference * 0.25}`;
-  // Offset to start at bottom left (135 degrees offset)
-  const offset = circumference * 0.625; 
-  
-  // Calculate fill based on score (0-100 mapped to 0-0.75 of circumference)
-  const fillPercentage = score / 100;
-  const fillDasharray = `${circumference * 0.75 * fillPercentage} ${circumference}`;
-
+  // We use CSS variables to adapt SVG stroke/sizing responsively
   const risk = getRiskDetails(score);
 
   if (loading) {
@@ -40,6 +30,16 @@ export function IntegrityScoreGauge({ score, lastAnalyzed, loading }: IntegrityG
       </div>
     );
   }
+
+  // The math below uses a 200x200 viewBox for both mobile and desktop.
+  // The SVG naturally scales down to the w-[140px] container.
+  const radius = 90; 
+  const circumference = 2 * Math.PI * radius;
+  const dasharray = `${circumference * 0.75} ${circumference * 0.25}`;
+  const offset = circumference * 0.625; 
+  
+  const fillPercentage = score / 100;
+  const fillDasharray = `${circumference * 0.75 * fillPercentage} ${circumference}`;
 
   return (
     <div className="flex flex-col items-center">
@@ -75,10 +75,10 @@ export function IntegrityScoreGauge({ score, lastAnalyzed, loading }: IntegrityG
         </svg>
 
         <div className="flex flex-col items-center justify-center z-10 mt-4 md:mt-6">
-          <div className={`font-mono text-5xl md:text-[72px] font-bold leading-none ${risk.color}`}>
+          <div className={`font-mono text-[52px] md:text-[72px] font-bold leading-none ${risk.color}`}>
             {score}
           </div>
-          <div className="font-mono text-sm md:text-[18px] text-text-secondary mt-1">
+          <div className="font-mono text-[14px] md:text-[18px] text-text-secondary mt-1">
             /100
           </div>
           <div className={`font-sans text-[11px] font-medium uppercase tracking-[0.04em] mt-2 md:mt-3 ${risk.color}`}>

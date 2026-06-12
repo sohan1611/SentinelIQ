@@ -1,123 +1,143 @@
-import Link from "next/link"
-import { Card } from "@/components/ui/Card"
-import { Badge } from "@/components/ui/Badge"
+import Link from "next/link";
+import { IntegrityScoreGauge } from "@/components/charts/IntegrityGauge";
+import { Button } from "@/components/ui/Button";
+import { ModuleScoreCard } from "@/components/modules/ScoreCard";
+import { RedFlagTimeline } from "@/components/charts/RedFlagTimeline";
+import { RedFlagItem } from "@/components/modules/RedFlagItem";
 
-export default function CompanyAnalysisPage({ params }: { params: { ticker: string } }) {
-  const ticker = params.ticker || "SMCI";
-  
+export default function CompanyOverviewPage({ params }: { params: { ticker: string } }) {
+  const ticker = params.ticker || "WDI.DE";
+
+  const componentScores = [
+    { label: "Financial Quality", score: 42, color: "bg-[#C47A14]", text: "text-[#C47A14]" },
+    { label: "Cash Flow Integrity", score: 31, color: "bg-[#B03028]", text: "text-[#B03028]" },
+    { label: "Governance Risk", score: 28, color: "bg-[#B03028]", text: "text-[#B03028]" },
+    { label: "Earnings Quality", score: 18, color: "bg-[#6E1010]", text: "text-[#6E1010]" },
+    { label: "Narrative Consistency", score: 55, color: "bg-[#C47A14]", text: "text-[#C47A14]" },
+  ];
+
+  const redFlags = [
+    { id: "1", date: "Jan 2022", label: "Revenue Miss", severity: "moderate" as const, type: "FINANCIAL" },
+    { id: "2", date: "Apr 2022", label: "CFO Resigned", severity: "high" as const, type: "GOVERNANCE" },
+    { id: "3", date: "Sep 2022", label: "Auditor Changed", severity: "high" as const, type: "GOVERNANCE" },
+    { id: "4", date: "Feb 2023", label: "Debt +43%", severity: "moderate" as const, type: "FINANCIAL" },
+    { id: "5", date: "Jun 2023", label: "Guidance Cut", severity: "moderate" as const, type: "NARRATIVE" },
+    { id: "6", date: "Nov 2023", label: "SEC Inquiry", severity: "severe" as const, type: "REGULATORY" },
+  ];
+
   return (
-    <div className="mx-auto max-w-[1100px] px-8 py-12">
-      {/* Header Block */}
-      <div className="mb-12 flex items-end justify-between border-b border-border pb-6">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <h1 className="text-3xl font-semibold font-sans text-primary">Super Micro Computer, Inc.</h1>
-            <span className="rounded bg-surface px-2 py-1 font-mono text-sm text-navy border border-border">{ticker}</span>
-            <span className="text-xs font-medium text-secondary bg-canvas px-2 py-1 border border-border rounded">Technology Hardware</span>
+    <div className="flex flex-col md:flex-row gap-8 mt-6">
+      {/* Left Column - 35% */}
+      <div className="w-full md:w-[35%] flex flex-col gap-6">
+        
+        {/* Score Panel */}
+        <div className="bg-[#FFFFFF] border border-[#E3DFD8] rounded-[8px] p-6 flex flex-col">
+          <div className="font-sans text-[10px] font-medium uppercase tracking-[0.08em] text-[#7A786F] mb-6 text-center">
+            CORPORATE INTEGRITY SCORE
           </div>
-        </div>
-        <div className="text-sm text-secondary text-right">
-          Last analyzed: June 9, 2025
+          <div className="mb-8">
+            <IntegrityScoreGauge score={22} lastAnalyzed="June 9, 2025" />
+          </div>
+          
+          <div className="w-full h-[1px] bg-[#E3DFD8] mb-6" />
+          
+          <div className="font-sans text-[10px] font-medium uppercase tracking-[0.08em] text-[#7A786F] mb-4">
+            COMPONENT SCORES
+          </div>
+          
+          <div className="flex flex-col gap-4 mb-6">
+            {componentScores.map((comp) => (
+              <div key={comp.label} className="flex flex-col gap-1">
+                <div className="flex justify-between items-center">
+                  <span className="font-sans text-[12px] text-[#7A786F]">{comp.label}</span>
+                  <span className={`font-mono text-[13px] font-medium ${comp.text}`}>{comp.score}</span>
+                </div>
+                <div className="w-full h-[6px] bg-[#E3DFD8] rounded-full overflow-hidden">
+                  <div className={`h-full ${comp.color}`} style={{ width: `${comp.score}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="w-full h-[1px] bg-[#E3DFD8] mb-6" />
+
+          <div className="flex flex-col gap-2">
+            <Link href={`/company/${ticker}/report`} className="w-full">
+              <Button variant="primary" className="w-full">View Full Report</Button>
+            </Link>
+            <Button variant="secondary" className="w-full">Export PDF</Button>
+            <button className="font-sans text-[13px] text-[#1C3558] hover:underline mt-2">
+              Add to Watchlist
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-[300px_1fr] gap-12 mb-16">
-        {/* Score Hero */}
-        <div className="flex flex-col items-center justify-center py-6">
-          <div className="relative flex h-48 w-48 items-center justify-center rounded-full border-[12px] border-risk-moderate-bg">
-            <div className="absolute top-0 left-0 h-full w-full rounded-full border-[12px] border-risk-moderate border-t-transparent border-l-transparent rotate-45"></div>
-            <div className="text-center flex flex-col items-center mt-2">
-              <span className="font-mono text-[64px] font-bold leading-none text-risk-moderate">42</span>
-              <span className="font-mono text-xl text-secondary">/100</span>
-            </div>
-          </div>
-          <div className="mt-6">
-            <Badge risk="moderate">Moderate Risk</Badge>
-          </div>
-        </div>
-
+      {/* Right Column - 65% */}
+      <div className="w-full md:w-[65%] flex flex-col gap-8">
+        
         {/* Module Grid */}
-        <div className="grid grid-cols-2 gap-6">
-          <Card className="p-6 flex flex-col justify-between">
-            <div>
-              <div className="mb-4 text-[11px] font-medium uppercase tracking-wider text-secondary">Financial Quality</div>
-              <div className="mb-2 font-mono text-3xl font-medium text-risk-high">28</div>
-              <p className="text-sm text-primary mb-4">Revenue growth diverging from operating cash flow for 3 quarters.</p>
-            </div>
-            <Link href={`/company/${ticker}/financials`} className="text-xs font-medium text-navy hover:underline">View Details →</Link>
-          </Card>
-          
-          <Card className="p-6 flex flex-col justify-between">
-            <div>
-              <div className="mb-4 text-[11px] font-medium uppercase tracking-wider text-secondary">Governance Risk</div>
-              <div className="mb-2 font-mono text-3xl font-medium text-risk-high">34</div>
-              <p className="text-sm text-primary mb-4">High executive turnover and recent change in independent auditing firm.</p>
-            </div>
-            <Link href={`/company/${ticker}/governance`} className="text-xs font-medium text-navy hover:underline">View Details →</Link>
-          </Card>
-
-          <Card className="p-6 flex flex-col justify-between">
-            <div>
-              <div className="mb-4 text-[11px] font-medium uppercase tracking-wider text-secondary">Cash Flow Integrity</div>
-              <div className="mb-2 font-mono text-3xl font-medium text-risk-moderate">55</div>
-              <p className="text-sm text-primary mb-4">DSO (Days Sales Outstanding) increasing faster than revenue.</p>
-            </div>
-            <Link href={`/company/${ticker}/financials`} className="text-xs font-medium text-navy hover:underline">View Details →</Link>
-          </Card>
-
-          <Card className="p-6 flex flex-col justify-between">
-            <div>
-              <div className="mb-4 text-[11px] font-medium uppercase tracking-wider text-secondary">Narrative Consistency</div>
-              <div className="mb-2 font-mono text-3xl font-medium text-risk-low">78</div>
-              <p className="text-sm text-primary mb-4">Management tone remains consistent with historical baselines.</p>
-            </div>
-            <Link href={`/company/${ticker}/narrative`} className="text-xs font-medium text-navy hover:underline">View Details →</Link>
-          </Card>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <ModuleScoreCard 
+            label="Financial Quality" 
+            score={42} 
+            summary="Revenue growth diverging from operating cash flow." 
+            href={`/company/${ticker}/financials`} 
+          />
+          <ModuleScoreCard 
+            label="Cash Flow Integrity" 
+            score={31} 
+            summary="Net income exceeded operating cash flow by 40%." 
+            href={`/company/${ticker}/financials`} 
+          />
+          <ModuleScoreCard 
+            label="Governance Risk" 
+            score={28} 
+            summary="Three critical governance events detected in 24 months." 
+            href={`/company/${ticker}/governance`} 
+          />
+          <ModuleScoreCard 
+            label="Narrative Consistency" 
+            score={55} 
+            summary="Significant tone shift and contradictory guidance." 
+            href={`/company/${ticker}/narrative`} 
+          />
         </div>
-      </div>
 
-      {/* Red Flag Timeline */}
-      <div>
-        <h3 className="mb-6 text-[11px] font-medium uppercase tracking-wider text-secondary">Red Flags Detected</h3>
-        <div className="relative pt-8 pb-4">
-          <div className="absolute top-[45px] left-0 w-full h-[1px] bg-border z-0"></div>
-          
-          <div className="relative z-10 flex justify-between px-4">
-            {/* Timeline Item 1 */}
-            <div className="flex flex-col items-center w-32">
-              <span className="text-[10px] text-secondary font-mono mb-2">Q3 2023</span>
-              <div className="h-3 w-3 rounded-full bg-risk-moderate ring-4 ring-canvas mb-3"></div>
-              <span className="text-xs text-center text-primary font-medium">Inventory buildup</span>
-            </div>
-
-            {/* Timeline Item 2 */}
-            <div className="flex flex-col items-center w-32">
-              <span className="text-[10px] text-secondary font-mono mb-2">Q4 2023</span>
-              <div className="h-3 w-3 rounded-full bg-risk-high ring-4 ring-canvas mb-3"></div>
-              <span className="text-xs text-center text-primary font-medium">CFO Resignation</span>
-            </div>
-
-            {/* Timeline Item 3 */}
-            <div className="flex flex-col items-center w-32">
-              <span className="text-[10px] text-secondary font-mono mb-2">Q1 2024</span>
-              <div className="h-3 w-3 rounded-full bg-risk-moderate ring-4 ring-canvas mb-3"></div>
-              <span className="text-xs text-center text-primary font-medium">Debt spike +43%</span>
-            </div>
-
-            {/* Timeline Item 4 */}
-            <div className="flex flex-col items-center w-32">
-              <span className="text-[10px] text-secondary font-mono mb-2">Q1 2024</span>
-              <div className="h-3 w-3 rounded-full bg-risk-high ring-4 ring-canvas mb-3"></div>
-              <span className="text-xs text-center text-primary font-medium">Auditor replaced</span>
+        {/* Red Flag Timeline */}
+        <div className="bg-[#FFFFFF] border border-[#E3DFD8] rounded-[8px] p-6">
+          <div className="flex items-center gap-3 mb-2">
+            <h2 className="font-sans text-[10px] font-medium uppercase tracking-[0.08em] text-[#7A786F]">
+              RED FLAGS DETECTED
+            </h2>
+            <div className="bg-[#FAE8E8] text-[#B03028] font-sans text-[10px] font-semibold px-2 py-0.5 rounded-full">
+              6 flags
             </div>
           </div>
+          
+          <RedFlagTimeline 
+            events={redFlags.map(f => ({ id: f.id, year: f.date, label: f.label, severity: f.severity }))}
+          />
         </div>
-      </div>
-      
-      <div className="mt-16 flex justify-end">
-         <Link href={`/company/${ticker}/report`} className="text-navy font-medium hover:underline text-sm">
-           View Full AI Report →
-         </Link>
+
+        {/* Red Flag List */}
+        <div>
+          <h2 className="font-sans text-[10px] font-medium uppercase tracking-[0.08em] text-[#7A786F] mb-2 pl-2">
+            FLAG DETAILS
+          </h2>
+          <div className="bg-[#FFFFFF] border border-[#E3DFD8] rounded-[8px] p-2 flex flex-col">
+            {redFlags.map((flag) => (
+              <RedFlagItem 
+                key={flag.id}
+                severity={flag.severity}
+                date={flag.date}
+                description={flag.label}
+                type={flag.type}
+              />
+            ))}
+          </div>
+        </div>
+
       </div>
     </div>
   )
