@@ -9,7 +9,7 @@ import Link from "next/link";
 interface CompanyCardProps {
   name: string;
   ticker: string;
-  score: number;
+  score: number | null;
   risk: RiskLevel;
   lastAnalyzed: string;
   href?: string;
@@ -18,7 +18,7 @@ interface CompanyCardProps {
 
 export function CompanyCard({ name, ticker, score, risk, lastAnalyzed, href = "#", scoreDelta = null }: CompanyCardProps) {
   const [flashColor, setFlashColor] = useState<string>("transparent");
-  const [displayScore, setDisplayScore] = useState(score);
+  const [displayScore, setDisplayScore] = useState<number | null>(score);
   const [scoreOpacity, setScoreOpacity] = useState(1);
 
   useEffect(() => {
@@ -82,7 +82,7 @@ export function CompanyCard({ name, ticker, score, risk, lastAnalyzed, href = "#
             transition: "opacity 150ms var(--ease-out)"
           }}
         >
-          {displayScore}
+          {displayScore === null ? "—" : displayScore}
         </div>
       </div>
       
