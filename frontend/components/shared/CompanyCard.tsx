@@ -14,9 +14,10 @@ interface CompanyCardProps {
   lastAnalyzed: string;
   href?: string;
   scoreDelta?: "increased" | "decreased" | null;
+  onRemove?: () => void;
 }
 
-export function CompanyCard({ name, ticker, score, risk, lastAnalyzed, href = "#", scoreDelta = null }: CompanyCardProps) {
+export function CompanyCard({ name, ticker, score, risk, lastAnalyzed, href = "#", scoreDelta = null, onRemove }: CompanyCardProps) {
   const [flashColor, setFlashColor] = useState<string>("transparent");
   const [displayScore, setDisplayScore] = useState<number | null>(score);
   const [scoreOpacity, setScoreOpacity] = useState(1);
@@ -86,14 +87,21 @@ export function CompanyCard({ name, ticker, score, risk, lastAnalyzed, href = "#
         </div>
       </div>
       
-      {/* Row 3: Date & Action */}
+      {/* Row 3: Date & Actions */}
       <div className="flex justify-between items-center">
         <div className="font-sans text-[12px] text-text-secondary">
           Last analyzed: {lastAnalyzed}
         </div>
-        <Link href={href} className="font-sans text-[12px] text-navy font-medium group-hover:underline active:underline">
-          View Report →
-        </Link>
+        <div className="flex items-center gap-3">
+          {onRemove && (
+            <button onClick={onRemove} className="font-sans text-[12px] text-risk-high hover:underline">
+              Remove
+            </button>
+          )}
+          <Link href={href} className="font-sans text-[12px] text-navy font-medium group-hover:underline active:underline">
+            View Report →
+          </Link>
+        </div>
       </div>
     </div>
   );
