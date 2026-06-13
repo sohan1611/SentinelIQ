@@ -2,6 +2,8 @@
 
 import React, { useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { useAuth } from "@/contexts/AuthContext";
 
 type Tab = "account" | "notifications" | "plan" | "api";
 
@@ -53,6 +55,7 @@ export default function SettingsPage() {
 }
 
 function AccountTab() {
+  const { user, isLoading } = useAuth();
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -64,20 +67,28 @@ function AccountTab() {
         <div className="flex flex-col md:flex-row gap-6 mb-6">
           <div className="flex-1 flex flex-col">
             <label className="font-sans text-[12px] font-semibold text-[#1A1A18] mb-[6px]">Full Name</label>
-            <input
-              type="text"
-              defaultValue="Jane Smith"
-              className="h-[44px] px-3 font-sans text-[14px] text-[#1A1A18] placeholder:text-[#B0ADA7] bg-[#FFFFFF] border border-[#E3DFD8] focus:border-[#1C3558] rounded-[6px] outline-none"
-            />
+            {isLoading ? (
+              <Skeleton className="h-[44px] rounded-[6px]" />
+            ) : (
+              <input
+                type="text"
+                defaultValue={user?.full_name ?? ""}
+                className="h-[44px] px-3 font-sans text-[14px] text-[#1A1A18] placeholder:text-[#B0ADA7] bg-[#FFFFFF] border border-[#E3DFD8] focus:border-[#1C3558] rounded-[6px] outline-none"
+              />
+            )}
           </div>
           <div className="flex-1 flex flex-col">
             <label className="font-sans text-[12px] font-semibold text-[#1A1A18] mb-[6px]">Work Email</label>
-            <input
-              type="email"
-              defaultValue="jane@firm.com"
-              disabled
-              className="h-[44px] px-3 font-sans text-[14px] text-[#7A786F] bg-[#F6F4EF] border border-[#E3DFD8] rounded-[6px] outline-none cursor-not-allowed"
-            />
+            {isLoading ? (
+              <Skeleton className="h-[44px] rounded-[6px]" />
+            ) : (
+              <input
+                type="email"
+                defaultValue={user?.email ?? ""}
+                disabled
+                className="h-[44px] px-3 font-sans text-[14px] text-[#7A786F] bg-[#F6F4EF] border border-[#E3DFD8] rounded-[6px] outline-none cursor-not-allowed"
+              />
+            )}
             <span className="font-sans text-[11px] text-[#B0ADA7] italic mt-2">
               To change your email, contact support.
             </span>
@@ -233,20 +244,15 @@ function Toggle({ isOn, onClick }: { isOn: boolean; onClick: () => void }) {
 }
 
 function PlanTab() {
+  const { user } = useAuth();
+  const tierLabel = user?.tier ? user.tier.charAt(0).toUpperCase() + user.tier.slice(1) : "Free";
+
   return (
     <>
       <section className="bg-[#FFFFFF] border border-[#E3DFD8] rounded-[8px] p-6">
         <h2 className="font-sans text-[10px] font-medium uppercase tracking-[0.08em] text-[#7A786F] mb-4">CURRENT PLAN</h2>
-        <div className="font-sans text-[20px] font-semibold text-[#1A1A18] mb-1">Free</div>
+        <div className="font-sans text-[20px] font-semibold text-[#1A1A18] mb-1">{tierLabel}</div>
         <p className="font-sans text-[13px] text-[#7A786F] mb-6">5 company analyses per month. Watchlist limited to 10.</p>
-        
-        <div className="mb-6 max-w-[400px]">
-          <div className="font-sans text-[13px] text-[#1A1A18] mb-2 font-medium">Analyses used this month: 3 / 5</div>
-          <div className="w-full h-[8px] bg-[#E3DFD8] rounded-full overflow-hidden mb-2">
-            <div className="h-full bg-[#1C3558]" style={{ width: "60%" }} />
-          </div>
-          <div className="font-mono text-[12px] text-[#7A786F]">3 of 5 used</div>
-        </div>
 
         <div className="flex flex-col items-start gap-2">
           <Button variant="primary">Upgrade to Pro</Button>
