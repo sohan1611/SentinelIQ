@@ -42,6 +42,18 @@ const config: Config = {
         card: "8px",
         btn: "6px",
       },
+      transitionDuration: {
+        instant: "var(--duration-instant)",
+        fast: "var(--duration-fast)",
+        base: "var(--duration-base)",
+        slow: "var(--duration-slow)",
+        deliberate: "var(--duration-deliberate)",
+      },
+      transitionTimingFunction: {
+        out: "var(--ease-out)",
+        in: "var(--ease-in)",
+        base: "var(--ease-base)",
+      },
     },
   },
   plugins: [],

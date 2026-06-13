@@ -10,6 +10,7 @@ export default function LoginPage() {
   const [state, setState] = useState<State>("default");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,20 +80,29 @@ export default function LoginPage() {
                 Forgot password?
               </Link>
             </div>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              disabled={isLoading}
-              placeholder="············"
-              className={`h-[44px] px-3 font-sans text-[14px] text-[#1A1A18] placeholder:text-[#B0ADA7] bg-[#FFFFFF] border rounded-[6px] outline-none transition-colors disabled:bg-[#F6F4EF] tracking-widest ${
-                isError 
-                  ? "border-[#B03028]" 
-                  : "border-[#E3DFD8] focus:border-[#1C3558]"
-              }`}
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={isLoading}
+                placeholder="············"
+                className={`w-full h-[44px] pl-3 pr-12 font-sans text-[14px] text-[#1A1A18] placeholder:text-[#B0ADA7] bg-[#FFFFFF] border rounded-[6px] outline-none transition-colors duration-fast ease-out disabled:bg-[#F6F4EF] ${!showPassword ? 'tracking-widest' : ''} ${
+                  isError 
+                    ? "border-[#B03028]" 
+                    : "border-[#E3DFD8] focus:border-[#1C3558]"
+                }`}
+              />
+              <button 
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 font-sans text-[12px] text-[#1C3558] select-none hover:underline focus-visible:outline-none focus-visible:underline"
+              >
+                {showPassword ? "Hide" : "Show"}
+              </button>
+            </div>
             {isError && (
-              <span className="font-sans text-[12px] text-[#B03028] mt-[4px] tracking-normal">
+              <span className="font-sans text-[12px] text-[#B03028] mt-[4px] tracking-normal transition-all duration-fast ease-out">
                 Password is incorrect.
               </span>
             )}

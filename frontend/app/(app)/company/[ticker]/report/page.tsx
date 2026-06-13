@@ -120,9 +120,8 @@ export default function ReportPage({ params }: { params: { ticker: string } }) {
 
         {/* RECOMMENDATION BOX */}
         <div className="mb-10">
-          <RecommendationBox 
-            variant="action"
-            label="INVESTIGATION RECOMMENDED"
+          <RecommendationBox
+            variant="action-required"
             body="Patterns detected in this analysis are consistent with known precursors to material financial misstatement. Independent due diligence and review of primary source filings is strongly advised before any investment or credit decision."
           />
         </div>

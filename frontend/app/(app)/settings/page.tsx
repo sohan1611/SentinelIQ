@@ -53,6 +53,10 @@ export default function SettingsPage() {
 }
 
 function AccountTab() {
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+
   return (
     <>
       <section className="bg-[#FFFFFF] border border-[#E3DFD8] rounded-[8px] p-6">
@@ -91,24 +95,51 @@ function AccountTab() {
         <div className="flex flex-col gap-4 mb-6 max-w-[400px]">
           <div className="flex flex-col">
             <label className="font-sans text-[12px] font-semibold text-[#1A1A18] mb-[6px]">Current Password</label>
-            <input
-              type="password"
-              className="h-[44px] px-3 font-sans text-[14px] text-[#1A1A18] bg-[#FFFFFF] border border-[#E3DFD8] focus:border-[#1C3558] rounded-[6px] outline-none tracking-widest"
-            />
+            <div className="relative">
+              <input
+                type={showCurrent ? "text" : "password"}
+                className={`w-full h-[44px] pl-3 pr-12 font-sans text-[14px] text-[#1A1A18] bg-[#FFFFFF] border border-[#E3DFD8] focus:border-[#1C3558] rounded-[6px] outline-none transition-colors duration-fast ease-out ${!showCurrent ? 'tracking-widest' : ''}`}
+              />
+              <button 
+                type="button"
+                onClick={() => setShowCurrent(!showCurrent)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 font-sans text-[12px] text-[#1C3558] select-none hover:underline focus-visible:outline-none focus-visible:underline"
+              >
+                {showCurrent ? "Hide" : "Show"}
+              </button>
+            </div>
           </div>
           <div className="flex flex-col">
             <label className="font-sans text-[12px] font-semibold text-[#1A1A18] mb-[6px]">New Password</label>
-            <input
-              type="password"
-              className="h-[44px] px-3 font-sans text-[14px] text-[#1A1A18] bg-[#FFFFFF] border border-[#E3DFD8] focus:border-[#1C3558] rounded-[6px] outline-none tracking-widest"
-            />
+            <div className="relative">
+              <input
+                type={showNew ? "text" : "password"}
+                className={`w-full h-[44px] pl-3 pr-12 font-sans text-[14px] text-[#1A1A18] bg-[#FFFFFF] border border-[#E3DFD8] focus:border-[#1C3558] rounded-[6px] outline-none transition-colors duration-fast ease-out ${!showNew ? 'tracking-widest' : ''}`}
+              />
+              <button 
+                type="button"
+                onClick={() => setShowNew(!showNew)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 font-sans text-[12px] text-[#1C3558] select-none hover:underline focus-visible:outline-none focus-visible:underline"
+              >
+                {showNew ? "Hide" : "Show"}
+              </button>
+            </div>
           </div>
           <div className="flex flex-col">
             <label className="font-sans text-[12px] font-semibold text-[#1A1A18] mb-[6px]">Confirm New Password</label>
-            <input
-              type="password"
-              className="h-[44px] px-3 font-sans text-[14px] text-[#1A1A18] bg-[#FFFFFF] border border-[#E3DFD8] focus:border-[#1C3558] rounded-[6px] outline-none tracking-widest"
-            />
+            <div className="relative">
+              <input
+                type={showConfirm ? "text" : "password"}
+                className={`w-full h-[44px] pl-3 pr-12 font-sans text-[14px] text-[#1A1A18] bg-[#FFFFFF] border border-[#E3DFD8] focus:border-[#1C3558] rounded-[6px] outline-none transition-colors duration-fast ease-out ${!showConfirm ? 'tracking-widest' : ''}`}
+              />
+              <button 
+                type="button"
+                onClick={() => setShowConfirm(!showConfirm)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 font-sans text-[12px] text-[#1C3558] select-none hover:underline focus-visible:outline-none focus-visible:underline"
+              >
+                {showConfirm ? "Hide" : "Show"}
+              </button>
+            </div>
           </div>
         </div>
         <div className="flex justify-end">

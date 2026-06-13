@@ -1,0 +1,16 @@
+export const ROUTES = {
+  home: "/",
+  login: "/login",
+  register: "/register",
+  forgotPassword: "/forgot-password",
+  verifyEmail: "/verify-email",
+  dashboard: "/dashboard",
+  search: "/search",
+  watchlist: "/watchlist",
+  settings: "/settings",
+  company: (ticker: string) => `/company/${ticker}`,
+  companyFinancials: (ticker: string) => `/company/${ticker}/financials`,
+  companyGovernance: (ticker: string) => `/company/${ticker}/governance`,
+  companyNarrative: (ticker: string) => `/company/${ticker}/narrative`,
+  companyReport: (ticker: string) => `/company/${ticker}/report`,
+}

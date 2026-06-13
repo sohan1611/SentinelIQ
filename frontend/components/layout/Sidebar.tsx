@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 
 const NAV_ITEMS_TOP = [
   { label: "Dashboard", href: "/dashboard" },
@@ -8,13 +11,12 @@ const NAV_ITEMS_TOP = [
 ];
 
 export function Sidebar() {
-  // Hardcoding active state to dashboard for preview purposes
-  const pathname = "/dashboard"; 
+  const pathname = usePathname() || "/dashboard";
 
   return (
     <aside className="fixed left-0 top-0 z-40 h-screen hidden md:flex flex-col w-[180px] lg:w-[240px] border-r border-border bg-[#FFFFFF]">
       <div className="flex h-[72px] items-center px-5 pt-6 pb-4">
-        <Link href="/" className="text-[15px] font-sans font-semibold text-text-primary">
+        <Link href="/dashboard" className="text-[15px] font-sans font-semibold text-text-primary">
           SentinelIQ
         </Link>
       </div>
@@ -24,15 +26,15 @@ export function Sidebar() {
       <nav className="flex flex-col flex-1">
         <div className="flex flex-col">
           {NAV_ITEMS_TOP.map((item) => {
-            const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+            const isActive = pathname === item.href || pathname.startsWith(item.href + "/") && item.href !== "/";
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center px-5 py-[10px] font-sans text-[14px] transition-colors ${
+                className={`flex items-center px-5 py-[10px] font-sans text-[14px] ${
                   isActive 
                     ? "border-l-2 border-navy text-text-primary font-semibold bg-transparent" 
-                    : "border-l-2 border-transparent text-text-secondary hover:bg-[#F6F4EF] font-normal"
+                    : "border-l-2 border-transparent text-text-secondary hover:bg-[#F6F4EF] font-normal transition-colors duration-instant ease-out"
                 }`}
               >
                 {item.label}
@@ -45,10 +47,10 @@ export function Sidebar() {
         
         <Link
           href="/settings"
-          className={`flex items-center px-5 py-[10px] font-sans text-[14px] transition-colors ${
+          className={`flex items-center px-5 py-[10px] font-sans text-[14px] ${
             pathname.startsWith("/settings")
               ? "border-l-2 border-navy text-text-primary font-semibold bg-transparent" 
-              : "border-l-2 border-transparent text-text-secondary hover:bg-[#F6F4EF] font-normal"
+              : "border-l-2 border-transparent text-text-secondary hover:bg-[#F6F4EF] font-normal transition-colors duration-instant ease-out"
           }`}
         >
           Settings
@@ -63,7 +65,7 @@ export function Sidebar() {
               jdoe@fund.com
             </div>
           </div>
-          <button className="font-sans text-[12px] text-text-muted hover:text-text-primary transition-colors text-left pl-[44px]">
+          <button className="font-sans text-[12px] text-text-muted hover:text-text-primary transition-colors duration-instant text-left pl-[44px]">
             Sign Out
           </button>
         </div>

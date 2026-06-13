@@ -1,4 +1,7 @@
+"use client";
+
 import * as React from "react";
+import { useEffect, useState } from "react";
 import { Badge } from "../ui/Badge";
 import type { RiskLevel } from "../ui/Badge";
 import Link from "next/link";
@@ -10,9 +13,38 @@ interface CompanyCardProps {
   risk: RiskLevel;
   lastAnalyzed: string;
   href?: string;
+  scoreDelta?: "increased" | "decreased" | null;
 }
 
-export function CompanyCard({ name, ticker, score, risk, lastAnalyzed, href = "#" }: CompanyCardProps) {
+export function CompanyCard({ name, ticker, score, risk, lastAnalyzed, href = "#", scoreDelta = null }: CompanyCardProps) {
+  const [flashColor, setFlashColor] = useState<string>("transparent");
+  const [displayScore, setDisplayScore] = useState(score);
+  const [scoreOpacity, setScoreOpacity] = useState(1);
+
+  useEffect(() => {
+    if (scoreDelta) {
+      setFlashColor(scoreDelta === "decreased" ? "#FAE8E8" : "#E4F2EB");
+      setScoreOpacity(0); // fade out
+
+      const t1 = setTimeout(() => {
+        setDisplayScore(score);
+        setScoreOpacity(1); // fade in
+      }, 150);
+
+      const t2 = setTimeout(() => {
+        setFlashColor("transparent");
+      }, 400);
+
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+      };
+    } else {
+      setDisplayScore(score);
+      setScoreOpacity(1);
+    }
+  }, [scoreDelta, score]);
+
   const scoreColors = {
     severe: "text-risk-severe",
     high: "text-risk-high",
@@ -24,7 +56,10 @@ export function CompanyCard({ name, ticker, score, risk, lastAnalyzed, href = "#
   };
 
   return (
-    <div className="w-full bg-surface border border-border rounded-[8px] p-4 flex flex-col mb-2 last:mb-0 group hover:bg-[#F1EFE9] transition-colors active:bg-[#F1EFE9]">
+    <div 
+      className="w-full border border-border rounded-[8px] p-4 flex flex-col mb-2 last:mb-0 group hover:bg-[#F1EFE9] active:bg-[#EAE7E0] transition-colors var(--duration-instant) var(--ease-out)"
+      style={{ backgroundColor: flashColor !== "transparent" ? flashColor : undefined }}
+    >
       {/* Row 1: Name + Risk Badge */}
       <div className="flex justify-between items-start mb-1">
         <div className="font-sans text-[14px] font-semibold text-text-primary line-clamp-1 pr-2">
@@ -40,8 +75,14 @@ export function CompanyCard({ name, ticker, score, risk, lastAnalyzed, href = "#
         <div className="font-mono text-[12px] text-navy">
           {ticker}
         </div>
-        <div className={`font-mono text-[16px] font-bold ${scoreColors[risk]}`}>
-          {score}
+        <div 
+          className={`font-mono text-[16px] font-bold ${scoreColors[risk]}`}
+          style={{
+            opacity: scoreOpacity,
+            transition: "opacity 150ms var(--ease-out)"
+          }}
+        >
+          {displayScore}
         </div>
       </div>
       
@@ -50,7 +91,7 @@ export function CompanyCard({ name, ticker, score, risk, lastAnalyzed, href = "#
         <div className="font-sans text-[12px] text-text-secondary">
           Last analyzed: {lastAnalyzed}
         </div>
-        <Link href={href} className="font-sans text-[12px] text-navy font-medium transition-colors group-hover:underline active:underline">
+        <Link href={href} className="font-sans text-[12px] text-navy font-medium group-hover:underline active:underline">
           View Report →
         </Link>
       </div>

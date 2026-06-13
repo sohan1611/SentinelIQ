@@ -12,6 +12,8 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -112,32 +114,50 @@ export default function RegisterPage() {
             <label className="font-sans text-[12px] font-semibold text-[#1A1A18] mb-[6px]">
               Password
             </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Min. 8 characters"
-              className={`h-[44px] px-3 font-sans text-[14px] text-[#1A1A18] placeholder:text-[#B0ADA7] bg-[#FFFFFF] border rounded-[6px] outline-none transition-colors tracking-widest ${
-                isError ? "border-[#B03028]" : "border-[#E3DFD8] focus:border-[#1C3558]"
-              }`}
-            />
-            {isError && <span className="font-sans text-[12px] text-[#B03028] mt-[4px] tracking-normal">Password must be at least 8 characters.</span>}
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Min. 8 characters"
+                className={`w-full h-[44px] pl-3 pr-12 font-sans text-[14px] text-[#1A1A18] placeholder:text-[#B0ADA7] bg-[#FFFFFF] border rounded-[6px] outline-none transition-colors duration-fast ease-out ${!showPassword ? 'tracking-widest' : ''} ${
+                  isError ? "border-[#B03028]" : "border-[#E3DFD8] focus:border-[#1C3558]"
+                }`}
+              />
+              <button 
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 font-sans text-[12px] text-[#1C3558] select-none hover:underline focus-visible:outline-none focus-visible:underline"
+              >
+                {showPassword ? "Hide" : "Show"}
+              </button>
+            </div>
+            {isError && <span className="font-sans text-[12px] text-[#B03028] mt-[4px] tracking-normal transition-all duration-fast ease-out">Password must be at least 8 characters.</span>}
           </div>
 
           <div className="flex flex-col">
             <label className="font-sans text-[12px] font-semibold text-[#1A1A18] mb-[6px]">
               Confirm Password
             </label>
-            <input
-              type="password"
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              placeholder="Repeat password"
-              className={`h-[44px] px-3 font-sans text-[14px] text-[#1A1A18] placeholder:text-[#B0ADA7] bg-[#FFFFFF] border rounded-[6px] outline-none transition-colors tracking-widest ${
-                isError ? "border-[#B03028]" : "border-[#E3DFD8] focus:border-[#1C3558]"
-              }`}
-            />
-            {isError && <span className="font-sans text-[12px] text-[#B03028] mt-[4px] tracking-normal">Passwords do not match.</span>}
+            <div className="relative">
+              <input
+                type={showConfirm ? "text" : "password"}
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                placeholder="Repeat password"
+                className={`w-full h-[44px] pl-3 pr-12 font-sans text-[14px] text-[#1A1A18] placeholder:text-[#B0ADA7] bg-[#FFFFFF] border rounded-[6px] outline-none transition-colors duration-fast ease-out ${!showConfirm ? 'tracking-widest' : ''} ${
+                  isError ? "border-[#B03028]" : "border-[#E3DFD8] focus:border-[#1C3558]"
+                }`}
+              />
+              <button 
+                type="button"
+                onClick={() => setShowConfirm(!showConfirm)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 font-sans text-[12px] text-[#1C3558] select-none hover:underline focus-visible:outline-none focus-visible:underline"
+              >
+                {showConfirm ? "Hide" : "Show"}
+              </button>
+            </div>
+            {isError && <span className="font-sans text-[12px] text-[#B03028] mt-[4px] tracking-normal transition-all duration-fast ease-out">Passwords do not match.</span>}
           </div>
 
           <div className="flex items-start mt-2">
