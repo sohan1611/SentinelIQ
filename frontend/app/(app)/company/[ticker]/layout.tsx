@@ -4,6 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { PageTransition } from "@/components/layout/PageTransition";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { Button } from "@/components/ui/Button";
+import { useCompanyData } from "@/lib/hooks/useCompanyData";
+import { useAnalysis } from "@/lib/hooks/useAnalysis";
+import { formatDate } from "@/lib/utils/formatDate";
 
 export default function CompanyLayout({
   children,
@@ -12,7 +17,7 @@ export default function CompanyLayout({
   children: React.ReactNode;
   params: { ticker: string };
 }) {
-  const ticker = params.ticker || "WDI.DE";
+  const ticker = params.ticker;
   const pathname = usePathname();
 
   const isReport = pathname.includes("/report");
@@ -45,105 +50,115 @@ export default function CompanyLayout({
     }
   }, [activeTabIndex, pathname]);
 
-  // Analysis State (Toggleable for review)
-  const [analysisState, setAnalysisState] = useState<"idle" | "running" | "complete">("idle");
-  const [elapsed, setElapsed] = useState(0);
-  const [stageIndex, setStageIndex] = useState(0);
+  const { company, isLoading: isCompanyLoading, error: companyError, refetch } = useCompanyData(ticker);
+  const { status: analysisStatus, isRunning, error: analysisError, start } = useAnalysis(refetch);
 
-  const stages = [
-    "Fetching financial data...",
-    "Running financial forensics...",
-    "Analyzing cash flow patterns...",
-    "Evaluating governance indicators...",
-    "Processing narrative consistency...",
-    "Computing Integrity Score...",
-    "Generating report..."
-  ];
+  // Auto-dismiss the status bar a few seconds after the run finishes
+  const [statusDismissed, setStatusDismissed] = useState(false);
 
   useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (analysisState === "running") {
-      timer = setInterval(() => {
-        setElapsed(prev => {
-          if (prev >= 60) {
-            setAnalysisState("complete");
-            return prev;
-          }
-          // Advance stage every 8 seconds
-          setStageIndex(Math.min(Math.floor(prev / 8), 6));
-          return prev + 1;
-        });
-      }, 1000);
-    } else if (analysisState === "idle") {
-      setElapsed(0);
-      setStageIndex(0);
-    }
-    return () => clearInterval(timer);
-  }, [analysisState]);
-
-  useEffect(() => {
-    if (analysisState === "complete") {
-      const t = setTimeout(() => setAnalysisState("idle"), 2000);
+    if (analysisStatus?.status === "complete" || analysisStatus?.status === "failed") {
+      setStatusDismissed(false);
+      const t = setTimeout(() => setStatusDismissed(true), 3000);
       return () => clearTimeout(t);
     }
-  }, [analysisState]);
+  }, [analysisStatus]);
+
+  const isAnalysisComplete = analysisStatus?.status === "complete";
+  const isAnalysisFailed = analysisStatus?.status === "failed";
+  const showStatusBar = isRunning || !!analysisError || (!!analysisStatus && !statusDismissed);
 
   return (
     <div className="w-full max-w-[1200px] relative">
-      {/* Dev Toggle for Analysis State */}
-      <div className="absolute top-0 right-0 flex gap-2 -mt-10">
-        <button onClick={() => setAnalysisState("running")} className="text-xs text-blue-500">Run Analysis</button>
-      </div>
-
       {!isReport && (
         <div className="mb-0">
           <div className="flex justify-between items-end pb-4">
             <div>
-              <h1 className="font-sans text-[26px] font-semibold text-[#1A1A18] mb-2">Wirecard AG</h1>
-              <div className="flex items-center gap-2 font-sans text-[13px] text-[#7A786F]">
-                <span className="font-mono text-[#1C3558]">{ticker === "WDI.DE" ? "WDI.DE" : ticker}</span>
-                <span className="text-[#E3DFD8]">·</span>
-                <span>Financial Technology</span>
-                <span className="text-[#E3DFD8]">·</span>
-                <span>Frankfurt Stock Exchange</span>
-              </div>
+              {companyError ? (
+                <>
+                  <h1 className="font-sans text-[26px] font-semibold text-[#1A1A18] mb-2">{ticker}</h1>
+                  <div className="font-sans text-[13px] text-[#B03028]">{companyError}</div>
+                </>
+              ) : isCompanyLoading ? (
+                <>
+                  <Skeleton className="h-[32px] w-[240px] mb-2" />
+                  <Skeleton className="h-[16px] w-[320px]" />
+                </>
+              ) : (
+                <>
+                  <h1 className="font-sans text-[26px] font-semibold text-[#1A1A18] mb-2">
+                    {company?.name ?? ticker}
+                  </h1>
+                  <div className="flex items-center gap-2 font-sans text-[13px] text-[#7A786F]">
+                    <span className="font-mono text-[#1C3558]">{company?.ticker ?? ticker}</span>
+                    {company?.sector && (
+                      <>
+                        <span className="text-[#E3DFD8]">·</span>
+                        <span>{company.sector}</span>
+                      </>
+                    )}
+                    {company?.exchange && (
+                      <>
+                        <span className="text-[#E3DFD8]">·</span>
+                        <span>{company.exchange}</span>
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
-            <div className="font-sans text-[12px] text-[#B0ADA7]">
-              Last analyzed: June 9, 2025
+            <div className="flex flex-col items-end gap-2 shrink-0">
+              <div className="font-sans text-[12px] text-[#B0ADA7]">
+                Last analyzed: {isCompanyLoading ? "—" : formatDate(company?.last_analyzed)}
+              </div>
+              <Button
+                variant="secondary"
+                className="!text-[12px]"
+                disabled={isRunning || isCompanyLoading}
+                onClick={() => start(company?.ticker ?? ticker)}
+              >
+                {isRunning ? "Analyzing..." : "Run Analysis"}
+              </Button>
             </div>
           </div>
         </div>
       )}
 
       {/* Analysis Running Status Bar */}
-      {analysisState !== "idle" && (
-        <div 
+      {showStatusBar && (
+        <div
           className={`w-full h-[36px] border-t border-b border-[#E3DFD8] flex items-center justify-between px-4 mb-4 transition-colors duration-300 ${
-            analysisState === "complete" ? "bg-[#E4F2EB]" : "bg-[#F0EDE8]"
+            analysisError || isAnalysisFailed ? "bg-[#FAE8E8]" : isAnalysisComplete ? "bg-[#E4F2EB]" : "bg-[#F0EDE8]"
           }`}
-          style={{ opacity: analysisState === "complete" ? (elapsed === 0 ? 0 : 1) : 1 }} // simple fade out handling
         >
           <div className="flex items-center gap-3">
-            {analysisState === "running" ? (
-              <div className="flex gap-1">
-                <div className="w-[6px] h-[6px] rounded-full bg-[#1C3558] animate-[pulse_1.5s_infinite_0ms]" />
-                <div className="w-[6px] h-[6px] rounded-full bg-[#1C3558] animate-[pulse_1.5s_infinite_200ms]" />
-                <div className="w-[6px] h-[6px] rounded-full bg-[#1C3558] animate-[pulse_1.5s_infinite_400ms]" />
-              </div>
+            {analysisError || isAnalysisFailed ? (
+              <span className="font-sans text-[12px] text-[#B03028]">
+                {analysisError ?? "Analysis failed. Please try again."}
+              </span>
+            ) : isAnalysisComplete ? (
+              <>
+                <div className="font-sans text-[14px] text-[#1A6B3C] font-bold">✓</div>
+                <span className="font-sans text-[12px] text-[#1A6B3C]">Investigation complete.</span>
+              </>
             ) : (
-              <div className="font-sans text-[14px] text-[#1A6B3C] font-bold">✓</div>
+              <>
+                <div className="flex gap-1">
+                  <div className="w-[6px] h-[6px] rounded-full bg-[#1C3558] animate-[pulse_1.5s_infinite_0ms]" />
+                  <div className="w-[6px] h-[6px] rounded-full bg-[#1C3558] animate-[pulse_1.5s_infinite_200ms]" />
+                  <div className="w-[6px] h-[6px] rounded-full bg-[#1C3558] animate-[pulse_1.5s_infinite_400ms]" />
+                </div>
+                <span className="font-sans text-[12px] text-[#7A786F]">
+                  {analysisStatus?.stage ?? "Starting analysis..."}
+                </span>
+              </>
             )}
-            
-            <span className={`font-sans text-[12px] ${analysisState === "complete" ? "text-[#1A6B3C]" : "text-[#7A786F]"}`}>
-              {analysisState === "running" 
-                ? `Investigation in progress — ${stages[stageIndex]}`
-                : "Investigation complete."
-              }
-            </span>
           </div>
-          <div className="font-mono text-[12px] text-[#B0ADA7]">
-            {Math.floor(elapsed / 60)}:{(elapsed % 60).toString().padStart(2, "0")}
-          </div>
+          {analysisStatus && !analysisError && !isAnalysisFailed && (
+            <div className="font-mono text-[12px] text-[#B0ADA7]">
+              {Math.floor(analysisStatus.elapsed_seconds / 60)}:{(analysisStatus.elapsed_seconds % 60).toString().padStart(2, "0")}
+            </div>
+          )}
         </div>
       )}
 
