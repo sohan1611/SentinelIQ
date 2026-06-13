@@ -2,63 +2,72 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
+import { useAuth } from "@/contexts/AuthContext";
+import { ApiError } from "@/types/api";
+import { ROUTES } from "@/lib/constants/routes";
 
-type State = "default" | "error" | "success";
+type State = "default" | "loading" | "error";
+
+interface FieldErrors {
+  name?: string;
+  email?: string;
+  password?: string;
+  confirm?: string;
+  terms?: string;
+}
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function RegisterPage() {
+  const router = useRouter();
+  const { register } = useAuth();
   const [state, setState] = useState<State>("default");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [agreed, setAgreed] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [errorMessage, setErrorMessage] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setState("success");
+
+    const errors: FieldErrors = {};
+    if (!name.trim()) errors.name = "Please enter your full name.";
+    if (!EMAIL_PATTERN.test(email)) errors.email = "Enter a valid work email address.";
+    if (password.length < 8) errors.password = "Password must be at least 8 characters.";
+    if (confirm !== password) errors.confirm = "Passwords do not match.";
+    if (!agreed) errors.terms = "You must agree to the terms to continue.";
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setErrorMessage("");
+      setState("error");
+      return;
+    }
+
+    setFieldErrors({});
+    setErrorMessage("");
+    setState("loading");
+
+    try {
+      await register({ email, password, full_name: name });
+      router.push(ROUTES.dashboard);
+    } catch (err) {
+      setErrorMessage(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
+      setState("error");
+    }
   };
 
-  const isError = state === "error";
-
-  if (state === "success") {
-    return (
-      <div className="w-full">
-        <div className="flex flex-col items-center mb-[32px]">
-          <h1 className="font-sans text-[16px] font-semibold text-[#1A1A18] mb-1">
-            SentinelIQ
-          </h1>
-          <p className="font-sans text-[12px] text-[#B0ADA7]">
-            Corporate fraud intelligence.
-          </p>
-        </div>
-
-        <div className="bg-[#FFFFFF] border border-[#E3DFD8] rounded-[10px] p-[32px] flex flex-col items-center text-center">
-          <div className="font-sans text-[32px] text-[#1A6B3C] mb-4 leading-none">✓</div>
-          <h2 className="font-sans text-[18px] font-semibold text-[#1A1A18] mb-2">
-            Check your inbox.
-          </h2>
-          <p className="font-sans text-[14px] text-[#7A786F] mb-6 max-w-[280px]">
-            We sent a verification link to jane@firm.com. Click the link to activate your account.
-          </p>
-          <button className="font-sans text-[14px] text-[#1C3558] hover:underline" onClick={() => setState("default")}>
-            Resend email
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const isLoading = state === "loading";
 
   return (
-    <div className="w-full relative">
-      {/* State Toggle for Review Purposes */}
-      <div className="absolute -top-10 right-0 flex gap-2">
-        <button onClick={() => setState("default")} className="text-xs text-gray-500">Default</button>
-        <button onClick={() => setState("error")} className="text-xs text-red-500">Error</button>
-        <button onClick={() => setState("success")} className="text-xs text-green-500">Success</button>
-      </div>
-
+    <div className="w-full">
       <div className="flex flex-col items-center mb-[32px]">
         <h1 className="font-sans text-[16px] font-semibold text-[#1A1A18] mb-1">
           SentinelIQ
@@ -77,7 +86,7 @@ export default function RegisterPage() {
         </p>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-[20px]">
-          
+
           <div className="flex flex-col">
             <label className="font-sans text-[12px] font-semibold text-[#1A1A18] mb-[6px]">
               Full Name
@@ -86,12 +95,15 @@ export default function RegisterPage() {
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              disabled={isLoading}
               placeholder="Jane Smith"
-              className={`h-[44px] px-3 font-sans text-[14px] text-[#1A1A18] placeholder:text-[#B0ADA7] bg-[#FFFFFF] border rounded-[6px] outline-none transition-colors ${
-                isError ? "border-[#B03028]" : "border-[#E3DFD8] focus:border-[#1C3558]"
+              className={`h-[44px] px-3 font-sans text-[14px] text-[#1A1A18] placeholder:text-[#B0ADA7] bg-[#FFFFFF] border rounded-[6px] outline-none transition-colors disabled:bg-[#F6F4EF] ${
+                fieldErrors.name ? "border-[#B03028]" : "border-[#E3DFD8] focus:border-[#1C3558]"
               }`}
             />
-            {isError && <span className="font-sans text-[12px] text-[#B03028] mt-[4px]">Please enter your full name.</span>}
+            {fieldErrors.name && (
+              <span className="font-sans text-[12px] text-[#B03028] mt-[4px]">{fieldErrors.name}</span>
+            )}
           </div>
 
           <div className="flex flex-col">
@@ -102,12 +114,15 @@ export default function RegisterPage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              disabled={isLoading}
               placeholder="you@firm.com"
-              className={`h-[44px] px-3 font-sans text-[14px] text-[#1A1A18] placeholder:text-[#B0ADA7] bg-[#FFFFFF] border rounded-[6px] outline-none transition-colors ${
-                isError ? "border-[#B03028]" : "border-[#E3DFD8] focus:border-[#1C3558]"
+              className={`h-[44px] px-3 font-sans text-[14px] text-[#1A1A18] placeholder:text-[#B0ADA7] bg-[#FFFFFF] border rounded-[6px] outline-none transition-colors disabled:bg-[#F6F4EF] ${
+                fieldErrors.email ? "border-[#B03028]" : "border-[#E3DFD8] focus:border-[#1C3558]"
               }`}
             />
-            {isError && <span className="font-sans text-[12px] text-[#B03028] mt-[4px]">Enter a valid work email address.</span>}
+            {fieldErrors.email && (
+              <span className="font-sans text-[12px] text-[#B03028] mt-[4px]">{fieldErrors.email}</span>
+            )}
           </div>
 
           <div className="flex flex-col">
@@ -119,12 +134,13 @@ export default function RegisterPage() {
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                disabled={isLoading}
                 placeholder="Min. 8 characters"
-                className={`w-full h-[44px] pl-3 pr-12 font-sans text-[14px] text-[#1A1A18] placeholder:text-[#B0ADA7] bg-[#FFFFFF] border rounded-[6px] outline-none transition-colors duration-fast ease-out ${!showPassword ? 'tracking-widest' : ''} ${
-                  isError ? "border-[#B03028]" : "border-[#E3DFD8] focus:border-[#1C3558]"
+                className={`w-full h-[44px] pl-3 pr-12 font-sans text-[14px] text-[#1A1A18] placeholder:text-[#B0ADA7] bg-[#FFFFFF] border rounded-[6px] outline-none transition-colors duration-fast ease-out disabled:bg-[#F6F4EF] ${!showPassword ? 'tracking-widest' : ''} ${
+                  fieldErrors.password ? "border-[#B03028]" : "border-[#E3DFD8] focus:border-[#1C3558]"
                 }`}
               />
-              <button 
+              <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 font-sans text-[12px] text-[#1C3558] select-none hover:underline focus-visible:outline-none focus-visible:underline"
@@ -132,7 +148,9 @@ export default function RegisterPage() {
                 {showPassword ? "Hide" : "Show"}
               </button>
             </div>
-            {isError && <span className="font-sans text-[12px] text-[#B03028] mt-[4px] tracking-normal transition-all duration-fast ease-out">Password must be at least 8 characters.</span>}
+            {fieldErrors.password && (
+              <span className="font-sans text-[12px] text-[#B03028] mt-[4px] tracking-normal transition-all duration-fast ease-out">{fieldErrors.password}</span>
+            )}
           </div>
 
           <div className="flex flex-col">
@@ -144,12 +162,13 @@ export default function RegisterPage() {
                 type={showConfirm ? "text" : "password"}
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
+                disabled={isLoading}
                 placeholder="Repeat password"
-                className={`w-full h-[44px] pl-3 pr-12 font-sans text-[14px] text-[#1A1A18] placeholder:text-[#B0ADA7] bg-[#FFFFFF] border rounded-[6px] outline-none transition-colors duration-fast ease-out ${!showConfirm ? 'tracking-widest' : ''} ${
-                  isError ? "border-[#B03028]" : "border-[#E3DFD8] focus:border-[#1C3558]"
+                className={`w-full h-[44px] pl-3 pr-12 font-sans text-[14px] text-[#1A1A18] placeholder:text-[#B0ADA7] bg-[#FFFFFF] border rounded-[6px] outline-none transition-colors duration-fast ease-out disabled:bg-[#F6F4EF] ${!showConfirm ? 'tracking-widest' : ''} ${
+                  fieldErrors.confirm ? "border-[#B03028]" : "border-[#E3DFD8] focus:border-[#1C3558]"
                 }`}
               />
-              <button 
+              <button
                 type="button"
                 onClick={() => setShowConfirm(!showConfirm)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 font-sans text-[12px] text-[#1C3558] select-none hover:underline focus-visible:outline-none focus-visible:underline"
@@ -157,23 +176,43 @@ export default function RegisterPage() {
                 {showConfirm ? "Hide" : "Show"}
               </button>
             </div>
-            {isError && <span className="font-sans text-[12px] text-[#B03028] mt-[4px] tracking-normal transition-all duration-fast ease-out">Passwords do not match.</span>}
+            {fieldErrors.confirm && (
+              <span className="font-sans text-[12px] text-[#B03028] mt-[4px] tracking-normal transition-all duration-fast ease-out">{fieldErrors.confirm}</span>
+            )}
           </div>
 
-          <div className="flex items-start mt-2">
-            <div className="flex items-center h-5">
-              <input
-                id="terms"
-                type="checkbox"
-                className="w-4 h-4 bg-[#FFFFFF] border-[#E3DFD8] rounded-[4px] accent-[#1C3558] cursor-pointer"
-              />
+          <div className="flex flex-col mt-2">
+            <div className="flex items-start">
+              <div className="flex items-center h-5">
+                <input
+                  id="terms"
+                  type="checkbox"
+                  checked={agreed}
+                  onChange={(e) => setAgreed(e.target.checked)}
+                  disabled={isLoading}
+                  className="w-4 h-4 bg-[#FFFFFF] border-[#E3DFD8] rounded-[4px] accent-[#1C3558] cursor-pointer disabled:cursor-not-allowed"
+                />
+              </div>
+              <div className="ml-3 font-sans text-[12px] text-[#7A786F]">
+                I agree to the <Link href="#" className="text-[#1C3558]">Terms of Service</Link> and <Link href="#" className="text-[#1C3558]">Privacy Policy</Link>.
+              </div>
             </div>
-            <div className="ml-3 font-sans text-[12px] text-[#7A786F]">
-              I agree to the <Link href="#" className="text-[#1C3558]">Terms of Service</Link> and <Link href="#" className="text-[#1C3558]">Privacy Policy</Link>.
-            </div>
+            {fieldErrors.terms && (
+              <span className="font-sans text-[12px] text-[#B03028] mt-[4px]">{fieldErrors.terms}</span>
+            )}
           </div>
 
-          <Button type="submit" variant="primary" className="w-full mt-2">
+          {errorMessage && (
+            <span className="font-sans text-[12px] text-[#B03028]">{errorMessage}</span>
+          )}
+
+          <Button
+            type="submit"
+            variant="primary"
+            className="w-full mt-2"
+            isLoading={isLoading}
+            loadingText="Creating account..."
+          >
             Create Account
           </Button>
         </form>

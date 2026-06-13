@@ -2,23 +2,34 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
+import { useAuth } from "@/contexts/AuthContext";
+import { ApiError } from "@/types/api";
+import { ROUTES } from "@/lib/constants/routes";
 
 type State = "default" | "loading" | "error";
 
 export default function LoginPage() {
+  const router = useRouter();
+  const { login } = useAuth();
   const [state, setState] = useState<State>("default");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("Incorrect email or password.");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setState("loading");
-    // Simulate network request then fail to show error state as requested
-    setTimeout(() => {
+
+    try {
+      await login({ email, password });
+      router.push(ROUTES.dashboard);
+    } catch (err) {
+      setErrorMessage(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
       setState("error");
-    }, 1500);
+    }
   };
 
   const isError = state === "error";
@@ -26,13 +37,6 @@ export default function LoginPage() {
 
   return (
     <div className="w-full">
-      {/* State Toggle for Review Purposes */}
-      <div className="absolute top-4 right-4 flex gap-2">
-        <button onClick={() => setState("default")} className="text-xs text-gray-500">Default</button>
-        <button onClick={() => setState("error")} className="text-xs text-red-500">Error</button>
-        <button onClick={() => setState("loading")} className="text-xs text-blue-500">Loading</button>
-      </div>
-
       <div className="flex flex-col items-center mb-[32px]">
         <h1 className="font-sans text-[16px] font-semibold text-[#1A1A18] mb-1">
           SentinelIQ
@@ -64,11 +68,6 @@ export default function LoginPage() {
                   : "border-[#E3DFD8] focus:border-[#1C3558]"
               }`}
             />
-            {isError && (
-              <span className="font-sans text-[12px] text-[#B03028] mt-[4px]">
-                No account found with this email address.
-              </span>
-            )}
           </div>
 
           <div className="flex flex-col">
@@ -103,18 +102,19 @@ export default function LoginPage() {
             </div>
             {isError && (
               <span className="font-sans text-[12px] text-[#B03028] mt-[4px] tracking-normal transition-all duration-fast ease-out">
-                Password is incorrect.
+                {errorMessage}
               </span>
             )}
           </div>
 
-          <Button 
-            type="submit" 
-            variant="primary" 
+          <Button
+            type="submit"
+            variant="primary"
             className="w-full mt-[4px]"
-            disabled={isLoading}
+            isLoading={isLoading}
+            loadingText="Signing in..."
           >
-            {isLoading ? "Signing in..." : "Sign In"}
+            Sign In
           </Button>
         </form>
       </div>
