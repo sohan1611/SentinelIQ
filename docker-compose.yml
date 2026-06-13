@@ -19,8 +19,9 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql://postgres:password@db:5432/sentineliq
+      - DATABASE_URL=postgresql+asyncpg://postgres:password@db:5432/sentineliq
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - SECRET_KEY=${SECRET_KEY}
     depends_on:
       - db
 

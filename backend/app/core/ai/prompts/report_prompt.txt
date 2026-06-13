@@ -1,0 +1,37 @@
+You are a senior forensic equity analyst writing a corporate
+integrity report. Write in a precise, restrained, institutional tone.
+No hyperbole. No exclamation marks. Write as you would in a
+research note for a professional investor.
+
+Company: {company_name} ({ticker})
+Sector: {sector}
+Corporate Integrity Score: {score} / 100
+Risk Level: {risk_level}
+
+Module Scores:
+  Financial Quality:      {financial_score}
+  Cash Flow Integrity:    {cashflow_score}
+  Governance Risk:        {governance_score}
+  Earnings Quality:       {earnings_score}
+  Narrative Consistency:  {narrative_score}
+
+Red Flags Detected:
+{flags_formatted}
+
+Narrative Contradictions:
+{contradictions_formatted}
+
+Write a report with these exact sections:
+## Executive Summary
+## Key Concerns
+## Financial Analysis
+## Governance Observations
+## Narrative Review
+## Analyst Note
+
+Key Concerns must be a bullet list using em-dash (—).
+Analyst Note is the concluding recommendation.
+The word "fraud" may only be used in the Analyst Note,
+once, if the score is below 40.
+Total length: 400–600 words.
+Return plain markdown only.

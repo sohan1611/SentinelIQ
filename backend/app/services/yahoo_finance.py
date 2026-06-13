@@ -1,0 +1,100 @@
+import asyncio
+import yfinance as yf
+from fastapi import HTTPException
+from app.services import cache
+
+async def fetch_company_info(ticker: str) -> dict:
+    cache_key = f"company:{ticker}:info"
+    cached = cache.get(cache_key)
+    if cached:
+        print(f"cache hit: {cache_key}")
+        return cached
+
+    def _fetch():
+        t = yf.Ticker(ticker)
+        info = t.info
+        if not info or 'longName' not in info:
+            raise HTTPException(status_code=404, detail="No financial data available for this ticker.")
+        return {
+            "longName": info.get("longName"),
+            "sector": info.get("sector"),
+            "exchange": info.get("exchange"),
+            "marketCap": info.get("marketCap")
+        }
+
+    data = await asyncio.to_thread(_fetch)
+    cache.set(cache_key, data, ttl_seconds=86400) # 24 hours
+    return data
+
+async def fetch_financials(ticker: str) -> list[dict]:
+    cache_key = f"company:{ticker}:financials"
+    cached = cache.get(cache_key)
+    if cached:
+        print(f"cache hit: {cache_key}")
+        return cached
+
+    def _fetch():
+        t = yf.Ticker(ticker)
+        try:
+            # We fetch annual data here. yfinance returns pandas DataFrames.
+            inc = t.financials
+            bs = t.balance_sheet
+            cf = t.cashflow
+
+            if inc.empty and bs.empty and cf.empty:
+                raise HTTPException(status_code=404, detail="No financial data available for this ticker.")
+            
+            # Align by columns (dates)
+            periods = set()
+            for df in [inc, bs, cf]:
+                periods.update(df.columns)
+            
+            periods = sorted(list(periods), reverse=True) # newest first
+            results = []
+            
+            for p in periods:
+                period_str = str(p.year)
+                # Helper to safely get value or None
+                def get_val(df, row_names):
+                    for r in row_names:
+                        if r in df.index:
+                            val = df.loc[r, p]
+                            if not pd.isna(val):
+                                return float(val)
+                    return None
+
+                rev = get_val(inc, ["Total Revenue", "Operating Revenue"])
+                net_inc = get_val(inc, ["Net Income", "Net Income Common Stockholders"])
+                ocf = get_val(cf, ["Operating Cash Flow", "Total Cash From Operating Activities"])
+                fcf = get_val(cf, ["Free Cash Flow"])
+                debt = get_val(bs, ["Total Debt"])
+                assets = get_val(bs, ["Total Assets"])
+                recv = get_val(bs, ["Accounts Receivable", "Net Receivables"])
+                
+                gm = None
+                if rev and get_val(inc, ["Gross Profit"]):
+                    gm = get_val(inc, ["Gross Profit"]) / rev
+                
+                results.append({
+                    "period": period_str,
+                    "period_type": "annual",
+                    "revenue": rev,
+                    "net_income": net_inc,
+                    "operating_cf": ocf,
+                    "free_cf": fcf,
+                    "total_debt": debt,
+                    "total_assets": assets,
+                    "accounts_recv": recv,
+                    "gross_margin": gm
+                })
+            
+            return results
+        except Exception as e:
+            if isinstance(e, HTTPException):
+                raise e
+            raise HTTPException(status_code=404, detail="No financial data available for this ticker.")
+    
+    import pandas as pd
+    data = await asyncio.to_thread(_fetch)
+    cache.set(cache_key, data, ttl_seconds=43200) # 12 hours
+    return data

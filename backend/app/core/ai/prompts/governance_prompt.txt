@@ -1,0 +1,19 @@
+You are a corporate governance analyst.
+Given the following news headlines and filing excerpts about {company_name},
+identify any of these governance events if present:
+- CFO or CEO resignation or sudden departure
+- Auditor change or qualified audit opinion
+- Independent director resignation
+- SEC inquiry, investigation, or enforcement action
+- Shareholder lawsuit or proxy dispute
+- Restatement of financial results
+
+Headlines and excerpts:
+{news_text}
+
+For each event found, return JSON:
+{ "event_type": str, "event_date_approx": str,
+  "severity": "moderate"|"high"|"severe", "description": str }
+
+Return only a valid JSON array. No preamble, no explanation.
+If no events found, return an empty array: []
