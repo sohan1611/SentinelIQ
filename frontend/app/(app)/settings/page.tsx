@@ -1,0 +1,247 @@
+"use client";
+
+import React, { useState } from "react";
+import { Button } from "@/components/ui/Button";
+
+type Tab = "account" | "notifications" | "plan" | "api";
+
+export default function SettingsPage() {
+  const [activeTab, setActiveTab] = useState<Tab>("account");
+
+  return (
+    <div className="w-full max-w-[800px]">
+      <h1 className="font-sans text-[22px] font-semibold text-[#1A1A18] mb-6">Settings</h1>
+      
+      <div className="flex items-center border-b border-[#E3DFD8] mb-8">
+        {(["account", "notifications", "plan", "api"] as Tab[]).map((tab) => {
+          const labels: Record<Tab, string> = {
+            account: "Account",
+            notifications: "Notifications",
+            plan: "Plan",
+            api: "API Access",
+          };
+          const isActive = activeTab === tab;
+          return (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-4 py-3 font-sans text-[14px] transition-colors ${
+                isActive
+                  ? "font-semibold text-[#1A1A18] border-b-2 border-[#1C3558]"
+                  : "text-[#7A786F] border-b-2 border-transparent hover:text-[#1A1A18]"
+              }`}
+            >
+              {labels[tab]}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="flex flex-col gap-8">
+        {activeTab === "account" && <AccountTab />}
+        {activeTab === "notifications" && <NotificationsTab />}
+        {activeTab === "plan" && <PlanTab />}
+        {activeTab === "api" && (
+          <div className="bg-[#FFFFFF] border border-[#E3DFD8] rounded-[8px] p-6">
+            <h2 className="font-sans text-[10px] font-medium uppercase tracking-[0.08em] text-[#7A786F] mb-4">API ACCESS</h2>
+            <p className="font-sans text-[14px] text-[#7A786F]">API access is available on the Pro plan.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AccountTab() {
+  return (
+    <>
+      <section className="bg-[#FFFFFF] border border-[#E3DFD8] rounded-[8px] p-6">
+        <h2 className="font-sans text-[10px] font-medium uppercase tracking-[0.08em] text-[#7A786F] mb-6">PROFILE</h2>
+        <div className="flex flex-col md:flex-row gap-6 mb-6">
+          <div className="flex-1 flex flex-col">
+            <label className="font-sans text-[12px] font-semibold text-[#1A1A18] mb-[6px]">Full Name</label>
+            <input
+              type="text"
+              defaultValue="Jane Smith"
+              className="h-[44px] px-3 font-sans text-[14px] text-[#1A1A18] placeholder:text-[#B0ADA7] bg-[#FFFFFF] border border-[#E3DFD8] focus:border-[#1C3558] rounded-[6px] outline-none"
+            />
+          </div>
+          <div className="flex-1 flex flex-col">
+            <label className="font-sans text-[12px] font-semibold text-[#1A1A18] mb-[6px]">Work Email</label>
+            <input
+              type="email"
+              defaultValue="jane@firm.com"
+              disabled
+              className="h-[44px] px-3 font-sans text-[14px] text-[#7A786F] bg-[#F6F4EF] border border-[#E3DFD8] rounded-[6px] outline-none cursor-not-allowed"
+            />
+            <span className="font-sans text-[11px] text-[#B0ADA7] italic mt-2">
+              To change your email, contact support.
+            </span>
+          </div>
+        </div>
+        <div className="flex justify-end">
+          <div className="w-[140px]">
+            <Button variant="secondary" className="w-full">Save Changes</Button>
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-[#FFFFFF] border border-[#E3DFD8] rounded-[8px] p-6">
+        <h2 className="font-sans text-[10px] font-medium uppercase tracking-[0.08em] text-[#7A786F] mb-6">PASSWORD</h2>
+        <div className="flex flex-col gap-4 mb-6 max-w-[400px]">
+          <div className="flex flex-col">
+            <label className="font-sans text-[12px] font-semibold text-[#1A1A18] mb-[6px]">Current Password</label>
+            <input
+              type="password"
+              className="h-[44px] px-3 font-sans text-[14px] text-[#1A1A18] bg-[#FFFFFF] border border-[#E3DFD8] focus:border-[#1C3558] rounded-[6px] outline-none tracking-widest"
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="font-sans text-[12px] font-semibold text-[#1A1A18] mb-[6px]">New Password</label>
+            <input
+              type="password"
+              className="h-[44px] px-3 font-sans text-[14px] text-[#1A1A18] bg-[#FFFFFF] border border-[#E3DFD8] focus:border-[#1C3558] rounded-[6px] outline-none tracking-widest"
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="font-sans text-[12px] font-semibold text-[#1A1A18] mb-[6px]">Confirm New Password</label>
+            <input
+              type="password"
+              className="h-[44px] px-3 font-sans text-[14px] text-[#1A1A18] bg-[#FFFFFF] border border-[#E3DFD8] focus:border-[#1C3558] rounded-[6px] outline-none tracking-widest"
+            />
+          </div>
+        </div>
+        <div className="flex justify-end">
+          <Button variant="secondary">Update Password</Button>
+        </div>
+      </section>
+
+      <section className="bg-[#FFFFFF] border border-[#B03028] rounded-[8px] p-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div>
+          <h2 className="font-sans text-[10px] font-medium uppercase tracking-[0.08em] text-[#7A786F] mb-2">DANGER ZONE</h2>
+          <div className="font-sans text-[14px] font-semibold text-[#B03028] mb-1">Delete Account</div>
+          <p className="font-sans text-[13px] text-[#7A786F] leading-[1.6]">
+            Permanently delete your account and all associated data. This action cannot be reversed.
+          </p>
+        </div>
+        <button className="h-[44px] px-6 font-sans text-[14px] font-semibold text-[#B03028] bg-[#FAE8E8] hover:bg-[#F2D6D6] transition-colors rounded-[6px] whitespace-nowrap self-start md:self-auto">
+          Delete Account
+        </button>
+      </section>
+    </>
+  );
+}
+
+function NotificationsTab() {
+  const [toggles, setToggles] = useState({
+    watchlist: true,
+    flags: true,
+    digest: false,
+    analysis: true,
+  });
+
+  const toggleState = (key: keyof typeof toggles) => {
+    setToggles(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  return (
+    <section className="bg-[#FFFFFF] border border-[#E3DFD8] rounded-[8px] overflow-hidden">
+      <div className="p-6 pb-4">
+        <h2 className="font-sans text-[10px] font-medium uppercase tracking-[0.08em] text-[#7A786F]">ALERT PREFERENCES</h2>
+      </div>
+      <div className="flex flex-col divide-y divide-[#E3DFD8]">
+        
+        <div className="px-6 py-5 flex items-center justify-between">
+          <div className="pr-4">
+            <div className="font-sans text-[14px] font-semibold text-[#1A1A18] mb-1">Watchlist integrity score changes</div>
+            <div className="font-sans text-[13px] text-[#7A786F]">Notify when any watched company score changes by ±10</div>
+          </div>
+          <Toggle isOn={toggles.watchlist} onClick={() => toggleState("watchlist")} />
+        </div>
+
+        <div className="px-6 py-5 flex items-center justify-between">
+          <div className="pr-4">
+            <div className="font-sans text-[14px] font-semibold text-[#1A1A18] mb-1">New red flags detected</div>
+            <div className="font-sans text-[13px] text-[#7A786F]">Notify when a new governance or financial flag is added</div>
+          </div>
+          <Toggle isOn={toggles.flags} onClick={() => toggleState("flags")} />
+        </div>
+
+        <div className="px-6 py-5 flex items-center justify-between">
+          <div className="pr-4">
+            <div className="font-sans text-[14px] font-semibold text-[#1A1A18] mb-1">Weekly digest</div>
+            <div className="font-sans text-[13px] text-[#7A786F]">Summary of all watchlist companies every Monday</div>
+          </div>
+          <Toggle isOn={toggles.digest} onClick={() => toggleState("digest")} />
+        </div>
+
+        <div className="px-6 py-5 flex items-center justify-between">
+          <div className="pr-4">
+            <div className="font-sans text-[14px] font-semibold text-[#1A1A18] mb-1">Analysis complete</div>
+            <div className="font-sans text-[13px] text-[#7A786F]">Notify when an investigation finishes running</div>
+          </div>
+          <Toggle isOn={toggles.analysis} onClick={() => toggleState("analysis")} />
+        </div>
+
+      </div>
+    </section>
+  );
+}
+
+function Toggle({ isOn, onClick }: { isOn: boolean; onClick: () => void }) {
+  return (
+    <button 
+      onClick={onClick}
+      className={`relative w-[36px] h-[20px] rounded-[10px] transition-colors shrink-0 ${isOn ? "bg-[#1C3558]" : "bg-[#E3DFD8]"}`}
+    >
+      <div 
+        className={`absolute top-[2px] w-[16px] h-[16px] bg-[#FFFFFF] rounded-full transition-all duration-200 ease-in-out ${isOn ? "left-[18px]" : "left-[2px]"}`} 
+      />
+    </button>
+  );
+}
+
+function PlanTab() {
+  return (
+    <>
+      <section className="bg-[#FFFFFF] border border-[#E3DFD8] rounded-[8px] p-6">
+        <h2 className="font-sans text-[10px] font-medium uppercase tracking-[0.08em] text-[#7A786F] mb-4">CURRENT PLAN</h2>
+        <div className="font-sans text-[20px] font-semibold text-[#1A1A18] mb-1">Free</div>
+        <p className="font-sans text-[13px] text-[#7A786F] mb-6">5 company analyses per month. Watchlist limited to 10.</p>
+        
+        <div className="mb-6 max-w-[400px]">
+          <div className="font-sans text-[13px] text-[#1A1A18] mb-2 font-medium">Analyses used this month: 3 / 5</div>
+          <div className="w-full h-[8px] bg-[#E3DFD8] rounded-full overflow-hidden mb-2">
+            <div className="h-full bg-[#1C3558]" style={{ width: "60%" }} />
+          </div>
+          <div className="font-mono text-[12px] text-[#7A786F]">3 of 5 used</div>
+        </div>
+
+        <div className="flex flex-col items-start gap-2">
+          <Button variant="primary">Upgrade to Pro</Button>
+          <span className="font-sans text-[12px] text-[#7A786F]">Unlimited analyses, full report export, API access.</span>
+        </div>
+      </section>
+
+      <section className="bg-[#FFFFFF] border border-[#E3DFD8] rounded-[8px] p-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div>
+          <h2 className="font-sans text-[10px] font-medium uppercase tracking-[0.08em] text-[#7A786F] mb-4">PRO PLAN</h2>
+          <div className="flex items-baseline gap-2 mb-4">
+            <span className="font-mono text-[24px] font-bold text-[#1A1A18]">$19</span>
+            <span className="font-sans text-[14px] text-[#7A786F]">/month</span>
+          </div>
+          <ul className="flex flex-col gap-2 font-sans text-[14px] text-[#1A1A18]">
+            <li className="flex"><span className="text-[#B0ADA7] mr-2">—</span>Unlimited company analyses</li>
+            <li className="flex"><span className="text-[#B0ADA7] mr-2">—</span>Full PDF report export</li>
+            <li className="flex"><span className="text-[#B0ADA7] mr-2">—</span>API access</li>
+            <li className="flex"><span className="text-[#B0ADA7] mr-2">—</span>Priority analysis queue</li>
+            <li className="flex"><span className="text-[#B0ADA7] mr-2">—</span>Historical comparison (12 months)</li>
+          </ul>
+        </div>
+        <div className="self-start md:self-end">
+          <Button variant="primary">Upgrade to Pro</Button>
+        </div>
+      </section>
+    </>
+  );
+}
