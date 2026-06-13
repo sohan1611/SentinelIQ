@@ -1,21 +1,22 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 const NAV_ITEMS = [
   { label: "Home", href: "/dashboard" },
   { label: "Search", href: "/search" },
   { label: "Watchlist", href: "/watchlist" },
-  { label: "Reports", href: "/reports" },
   { label: "Settings", href: "/settings" },
 ];
 
 export function BottomTabBar() {
-  // Hardcoded active state for demonstration
-  const pathname = "/dashboard"; 
+  const pathname = usePathname() || "/dashboard";
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 flex h-[56px] w-full bg-surface border-t border-border md:hidden">
       {NAV_ITEMS.map((item) => {
-        const isActive = pathname.startsWith(item.href);
+        const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
         return (
           <Link
             key={item.href}
