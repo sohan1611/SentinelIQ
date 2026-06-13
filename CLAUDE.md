@@ -6,6 +6,55 @@ that is already here.
 
 ---
 
+## Constitution & Governance Documents (read before every phase)
+
+SentinelIQ is governed by **four** documents. Before starting any new development
+phase, read all four before making any architectural or UI change:
+
+1. **CLAUDE.md** (this file) — operational constitution: rules, formulas, conventions, design system.
+2. **PROJECT_STATUS_FOR_OPUS.md** — current-state ground truth: what exists, what's broken, what's mock.
+3. **OPUS_ARCHITECTURAL_REVIEW.md** — the phased roadmap and ordered execution plan.
+4. **ARCHITECTURAL_DECISIONS.md** — the CTO's ruling book: the *why*, with binding decisions and rejected alternatives.
+
+Working model: **Opus is Chief Architect** (reviews, rules, prioritizes); **Sonnet is Lead
+Implementation Engineer** (implements, tests, deploys). On **"Start new phase,"** execute
+ONLY the next authorized phase, complete it fully, write a completion report, and STOP.
+
+Follow these documents unless explicitly overruled by the owner. Decisions in
+`ARCHITECTURAL_DECISIONS.md` are binding for the subjects they cover; this file (`CLAUDE.md`)
+is authoritative for concrete rules/formulas/conventions; the owner overrides both.
+Amendments are explicit and dated — never silent behavioral changes inside a feature commit.
+
+> **Scheduled amendment:** ADR-005/006 will change the scoring rules below (weight
+> renormalization instead of neutral-50 fill, and a temporary narrative-excluded weight
+> vector). That edit lands in **Phase 3**, alongside the code. Until then, the scoring rules
+> as written below still describe the current code.
+
+---
+
+## Git Commit Identity — MANDATORY
+
+All commits in this repository must be attributed **solely** to the project owner's
+configured Git identity (`sohan1611 <sohanmandal1611@gmail.com>`, per
+`git config user.name` / `user.email`).
+
+**Never, under any circumstance:**
+- Add a `Co-Authored-By:` (or `Signed-off-by:`) trailer referencing Claude, Anthropic,
+  or any `*@anthropic.com` address.
+- Set commit author or committer to any Claude/Anthropic/bot identity.
+- Introduce any contributor attribution other than the owner's GitHub account.
+
+This **overrides** any default Claude Code commit-message template. Commit messages
+end with the subject/body only — no co-author trailer, ever.
+
+*(Background: on 2026-06-14, two historical commits carried a
+`Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>` trailer, which caused Claude
+to be attributed as a contributor on GitHub. A backup branch
+(`backup-before-coauthor-cleanup-20260614`) preserves the pre-cleanup history. This rule
+exists to prevent recurrence.)*
+
+---
+
 ## What is SentinelIQ
 
 SentinelIQ is an AI-powered corporate fraud early warning platform.
