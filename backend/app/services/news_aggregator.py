@@ -1,4 +1,5 @@
 import asyncio
+import time
 import feedparser
 from datetime import datetime, timedelta
 from app.services import cache
@@ -67,6 +68,45 @@ async def fetch_news_sentiment(company_name: str, ticker: str) -> float:
     
     cache.set(cache_key, final_score, ttl_seconds=7200) # 2 hours
     return final_score
+
+async def fetch_news_statements(company_name: str, ticker: str, limit: int = 5) -> list[dict]:
+    # Returns recent headlines as {"period", "text", "source"} dicts — same shape
+    # ConsistencyEngine.analyze already expects, used as real narrative input.
+    cache_key = f"company:{ticker}:news_statements"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    feeds = [f"https://news.google.com/rss/search?q={ticker}"]
+
+    def _fetch():
+        items = []
+        for url in feeds:
+            try:
+                parsed = feedparser.parse(url)
+                for entry in parsed.entries[:limit]:
+                    title = entry.title.strip()
+                    if not title:
+                        continue
+                    period = None
+                    if hasattr(entry, "published_parsed") and entry.published_parsed:
+                        dt = datetime.fromtimestamp(time.mktime(entry.published_parsed))
+                        period = dt.strftime("%Y-%m-%d")
+                    items.append({"title": title, "period": period})
+            except Exception:
+                continue
+        return items
+
+    raw_items = await asyncio.to_thread(_fetch)
+
+    statements = []
+    for idx, item in enumerate(raw_items):
+        period = item["period"] or f"item-{idx + 1:02d}"
+        statements.append({"period": period, "text": item["title"], "source": "News"})
+
+    cache.set(cache_key, statements, ttl_seconds=7200)  # 2h, matches news TTL
+    return statements
+
 
 async def fetch_news_text(company_name: str, ticker: str) -> str:
     # Used for governance & narrative prompts to have raw text

@@ -1,7 +1,10 @@
-import asyncio
 import logging
+from dataclasses import dataclass, field
+from typing import Awaitable, Callable
 from uuid import UUID
 from datetime import datetime
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import AsyncSessionLocal
 from app.models.company import Company
@@ -12,7 +15,7 @@ from app.models.narrative_snapshot import NarrativeSnapshot
 from app.models.report import Report
 
 from app.services.yahoo_finance import fetch_financials
-from app.services.news_aggregator import fetch_news_sentiment, fetch_news_text
+from app.services.news_aggregator import fetch_news_sentiment, fetch_news_text, fetch_news_statements
 from app.core.forensics.forensics_runner import ForensicsRunner
 from app.core.governance.governance_scorer import GovernanceScorer
 from app.core.narrative.consistency_engine import ConsistencyEngine
@@ -21,185 +24,246 @@ from app.core.ai.report_generator import ReportGenerator
 
 logger = logging.getLogger(__name__)
 
-async def update_status(session, analysis_id: UUID, stage: str):
+
+async def update_status(session: AsyncSession, analysis_id: UUID, stage: str):
     analysis = await session.get(AnalysisResult, analysis_id)
     if analysis:
         analysis.status = f"running:{stage}"
         await session.commit()
 
+
+@dataclass
+class StageContext:
+    session: AsyncSession
+    company: Company
+    analysis: AnalysisResult
+    analysis_id: UUID
+    company_id: UUID
+    scores: dict = field(default_factory=dict)
+    forensics_details: dict = field(default_factory=dict)
+    financial_records: list = field(default_factory=list)
+    all_flags: list = field(default_factory=list)
+    narrative_snapshots: list = field(default_factory=list)
+    narrative_snapshot_data: list = field(default_factory=list)
+    narrative_provenance: list = field(default_factory=list)
+    governance_provenance: dict = field(default_factory=dict)
+
+
+@dataclass
+class Stage:
+    name: str
+    status_text: str
+    fn: Callable[[StageContext], Awaitable[None]]
+
+
+async def _stage_financials(ctx: StageContext):
+    try:
+        raw_financials = await fetch_financials(ctx.company.ticker)
+        for f in raw_financials:
+            fd = FinancialData(company_id=ctx.company_id, **f)
+            ctx.session.add(fd)
+            ctx.financial_records.append(fd)
+        await ctx.session.commit()
+    except Exception as e:
+        logger.error(f"Stage financials failed for {ctx.company.ticker}: {e}")
+        await ctx.session.rollback()
+
+
+async def _stage_forensics(ctx: StageContext):
+    try:
+        if not ctx.financial_records:
+            ctx.scores["financial"] = None
+            ctx.scores["cashflow"] = None
+            ctx.scores["earnings"] = None
+            ctx.scores["debt"] = None
+            return
+
+        forensics_res = ForensicsRunner().run_forensics(ctx.financial_records)
+        revenue_score = forensics_res["revenue"].score
+        debt_score = forensics_res["debt"].score
+        ctx.scores["financial"] = (revenue_score + debt_score) / 2
+        ctx.scores["cashflow"] = forensics_res["cashflow"].score
+        ctx.scores["earnings"] = forensics_res["earnings"].score
+        ctx.scores["debt"] = debt_score
+
+        ctx.forensics_details["revenue"] = forensics_res["revenue"].details
+        ctx.forensics_details["cashflow"] = forensics_res["cashflow"].details
+        ctx.forensics_details["earnings"] = forensics_res["earnings"].details
+        ctx.forensics_details["debt"] = forensics_res["debt"].details
+
+        for f in forensics_res["all_flags"]:
+            flag_rec = RedFlag(
+                analysis_id=ctx.analysis_id,
+                company_id=ctx.company_id,
+                flag_type=f.flag_type,
+                severity=f.severity,
+                description=f.description,
+                period=f.period,
+            )
+            ctx.session.add(flag_rec)
+            ctx.all_flags.append(flag_rec)
+        await ctx.session.commit()
+    except Exception as e:
+        logger.error(f"Stage forensics failed for {ctx.company.ticker}: {e}")
+        await ctx.session.rollback()
+        ctx.scores["financial"] = None
+        ctx.scores["cashflow"] = None
+        ctx.scores["earnings"] = None
+        ctx.scores["debt"] = None
+
+
+async def _stage_governance(ctx: StageContext):
+    try:
+        news_text = await fetch_news_text(ctx.company.name, ctx.company.ticker)
+        gov_score, gov_flags, provenance = await GovernanceScorer().analyze(ctx.company.name, news_text)
+        ctx.scores["governance"] = gov_score
+        ctx.governance_provenance = provenance
+        for gf in gov_flags:
+            flag_rec = RedFlag(
+                analysis_id=ctx.analysis_id,
+                company_id=ctx.company_id,
+                **gf,
+            )
+            ctx.session.add(flag_rec)
+            ctx.all_flags.append(flag_rec)
+        await ctx.session.commit()
+    except Exception as e:
+        logger.error(f"Stage governance failed for {ctx.company.ticker}: {e}")
+        await ctx.session.rollback()
+        ctx.scores["governance"] = None
+
+
+async def _stage_narrative(ctx: StageContext):
+    try:
+        statements = await fetch_news_statements(ctx.company.name, ctx.company.ticker, limit=5)
+        if len(statements) < 2:
+            ctx.scores["narrative"] = 50.0
+            return
+
+        narrative_score, snaps, cont_flags, provenance = await ConsistencyEngine().analyze(
+            ctx.company.name, statements
+        )
+        ctx.scores["narrative"] = narrative_score
+        ctx.narrative_snapshot_data = snaps
+        ctx.narrative_provenance = provenance
+
+        for s in snaps:
+            sn = NarrativeSnapshot(company_id=ctx.company_id, fetched_at=datetime.utcnow(), **s)
+            ctx.session.add(sn)
+            ctx.narrative_snapshots.append(sn)
+
+        for cf in cont_flags:
+            flag_rec = RedFlag(
+                analysis_id=ctx.analysis_id,
+                company_id=ctx.company_id,
+                **cf,
+            )
+            ctx.session.add(flag_rec)
+            ctx.all_flags.append(flag_rec)
+
+        await ctx.session.commit()
+    except Exception as e:
+        logger.error(f"Stage narrative failed for {ctx.company.ticker}: {e}")
+        await ctx.session.rollback()
+        ctx.scores["narrative"] = 50.0
+
+
+async def _stage_news(ctx: StageContext):
+    try:
+        ctx.scores["news"] = await fetch_news_sentiment(ctx.company.name, ctx.company.ticker)
+    except Exception as e:
+        logger.error(f"Stage news failed for {ctx.company.ticker}: {e}")
+        ctx.scores["news"] = 50.0
+
+
+async def _stage_score_persist(ctx: StageContext):
+    try:
+        period_count = len(ctx.financial_records)
+        integrity_score, confidence = FraudScorer().compute_integrity_score(ctx.scores, period_count)
+
+        ctx.analysis.integrity_score = integrity_score
+        ctx.analysis.financial_score = ctx.scores.get("financial")
+        ctx.analysis.cashflow_score = ctx.scores.get("cashflow")
+        ctx.analysis.governance_score = ctx.scores.get("governance")
+        ctx.analysis.earnings_score = ctx.scores.get("earnings")
+        ctx.analysis.narrative_score = ctx.scores.get("narrative")
+        ctx.analysis.news_score = ctx.scores.get("news")
+        ctx.analysis.module_details = {
+            "scores": {k: v for k, v in ctx.scores.items() if v is not None},
+            "confidence": confidence,
+            "revenue": ctx.forensics_details.get("revenue", {}),
+            "cashflow": ctx.forensics_details.get("cashflow", {}),
+            "earnings": ctx.forensics_details.get("earnings", {}),
+            "debt": ctx.forensics_details.get("debt", {}),
+            "narrative": {
+                "snapshots": ctx.narrative_snapshot_data,
+                "statements_used": len(ctx.narrative_snapshot_data),
+                "provenance": ctx.narrative_provenance,
+            },
+            "governance": {"provenance": ctx.governance_provenance},
+        }
+        await ctx.session.commit()
+    except Exception as e:
+        logger.error(f"Stage score_persist failed for {ctx.company.ticker}: {e}")
+        await ctx.session.rollback()
+
+
+async def _stage_report(ctx: StageContext):
+    try:
+        report_content = await ReportGenerator().generate_report(
+            ctx.company, ctx.analysis, ctx.all_flags, ctx.narrative_snapshots
+        )
+    except Exception as e:
+        logger.error(f"Stage report failed for {ctx.company.ticker}: {e}")
+        report_content = "Report generation failed. Raw scores are available above."
+
+    rep = Report(
+        company_id=ctx.company_id,
+        analysis_id=ctx.analysis_id,
+        content=report_content,
+    )
+    ctx.session.add(rep)
+    await ctx.session.commit()
+
+
+STAGES: list[Stage] = [
+    Stage("financials", "Fetching financial data...", _stage_financials),
+    Stage("forensics", "Running financial forensics...", _stage_forensics),
+    Stage("governance", "Evaluating governance indicators...", _stage_governance),
+    Stage("narrative", "Processing narrative consistency...", _stage_narrative),
+    Stage("news", "Computing Integrity Score...", _stage_news),
+    Stage("score_persist", "Computing Integrity Score...", _stage_score_persist),
+    Stage("report", "Generating report...", _stage_report),
+]
+
+
 async def run_full_analysis(company_id: UUID, analysis_id: UUID):
     async with AsyncSessionLocal() as session:
-        try:
-            company = await session.get(Company, company_id)
-            analysis = await session.get(AnalysisResult, analysis_id)
-            if not company or not analysis:
-                logger.error(f"Analysis {analysis_id}: Company or Analysis missing")
-                return
+        company = await session.get(Company, company_id)
+        analysis = await session.get(AnalysisResult, analysis_id)
+        if not company or not analysis:
+            logger.error(f"Analysis {analysis_id}: Company or Analysis missing")
+            return
 
-            all_flags = []
-            narrative_snapshots = []
-            narrative_snapshot_data = []
-            forensics_details = {}
-            scores = {}
+        ctx = StageContext(
+            session=session,
+            company=company,
+            analysis=analysis,
+            analysis_id=analysis_id,
+            company_id=company_id,
+        )
 
-            # Stage 1
-            await update_status(session, analysis_id, "Fetching financial data...")
-            financial_records = []
+        for stage in STAGES:
+            await update_status(session, analysis_id, stage.status_text)
             try:
-                raw_financials = await fetch_financials(company.ticker)
-                for f in raw_financials:
-                    fd = FinancialData(company_id=company_id, **f)
-                    session.add(fd)
-                    financial_records.append(fd)
-                await session.commit()
+                await stage.fn(ctx)
             except Exception as e:
-                logger.error(f"Stage 1 failed for {company.ticker}: {e}")
-                await session.rollback()
+                logger.error(f"Unhandled exception in stage '{stage.name}' for {company.ticker}: {e}")
+                try:
+                    await session.rollback()
+                except Exception:
+                    pass
 
-            # Stage 2 & 3
-            await update_status(session, analysis_id, "Running financial forensics...")
-            await update_status(session, analysis_id, "Analyzing cash flow patterns...")
-            try:
-                if financial_records:
-                    forensics_res = ForensicsRunner().run_forensics(financial_records)
-                    revenue_score = forensics_res["revenue"].score
-                    debt_score = forensics_res["debt"].score
-                    scores["financial"] = (revenue_score + debt_score) / 2
-                    scores["cashflow"] = forensics_res["cashflow"].score
-                    scores["earnings"] = forensics_res["earnings"].score
-                    scores["debt"] = debt_score
-
-                    forensics_details["revenue"] = forensics_res["revenue"].details
-                    forensics_details["cashflow"] = forensics_res["cashflow"].details
-                    forensics_details["earnings"] = forensics_res["earnings"].details
-                    forensics_details["debt"] = forensics_res["debt"].details
-
-                    for f in forensics_res["all_flags"]:
-                        flag_rec = RedFlag(
-                            analysis_id=analysis_id,
-                            company_id=company_id,
-                            flag_type=f.flag_type,
-                            severity=f.severity,
-                            description=f.description,
-                            period=f.period
-                        )
-                        session.add(flag_rec)
-                        all_flags.append(flag_rec)
-                    await session.commit()
-                else:
-                    scores["financial"] = scores["cashflow"] = scores["earnings"] = scores["debt"] = 50.0
-            except Exception as e:
-                logger.error(f"Stage 2/3 failed for {company.ticker}: {e}")
-                await session.rollback()
-                scores["financial"] = scores["cashflow"] = scores["earnings"] = scores["debt"] = 50.0
-
-            # Stage 4
-            await update_status(session, analysis_id, "Evaluating governance indicators...")
-            try:
-                news_text = await fetch_news_text(company.name, company.ticker)
-                gov_score, gov_flags = await GovernanceScorer().analyze(company.name, news_text)
-                scores["governance"] = gov_score
-                for gf in gov_flags:
-                    flag_rec = RedFlag(
-                        analysis_id=analysis_id,
-                        company_id=company_id,
-                        **gf
-                    )
-                    session.add(flag_rec)
-                    all_flags.append(flag_rec)
-                await session.commit()
-            except Exception as e:
-                logger.error(f"Stage 4 failed for {company.ticker}: {e}")
-                await session.rollback()
-                scores["governance"] = 50.0
-
-            # Stage 5
-            await update_status(session, analysis_id, "Processing narrative consistency...")
-            try:
-                # We mock management statements from news_text for this prototype
-                # In real app, we'd fetch transcripts
-                statements = [
-                    {"period": "Current", "text": "We see strong growth ahead despite headwinds.", "source": "News"}
-                ]
-                narrative_score, snaps, cont_flags = await ConsistencyEngine().analyze(company.name, statements)
-                scores["narrative"] = narrative_score
-                narrative_snapshot_data = snaps
-
-                for s in snaps:
-                    sn = NarrativeSnapshot(company_id=company_id, **s)
-                    session.add(sn)
-                    narrative_snapshots.append(sn)
-                    
-                for cf in cont_flags:
-                    flag_rec = RedFlag(
-                        analysis_id=analysis_id,
-                        company_id=company_id,
-                        **cf
-                    )
-                    session.add(flag_rec)
-                    all_flags.append(flag_rec)
-                await session.commit()
-            except Exception as e:
-                logger.error(f"Stage 5 failed for {company.ticker}: {e}")
-                await session.rollback()
-                scores["narrative"] = 50.0
-
-            # Stage 6
-            await update_status(session, analysis_id, "Computing Integrity Score...")
-            try:
-                news_sentiment = await fetch_news_sentiment(company.name, company.ticker)
-                scores["news"] = news_sentiment
-                
-                integrity_score = FraudScorer().compute_integrity_score(scores)
-                
-                analysis.integrity_score = integrity_score
-                analysis.financial_score = scores.get("financial")
-                analysis.cashflow_score = scores.get("cashflow")
-                analysis.governance_score = scores.get("governance")
-                analysis.earnings_score = scores.get("earnings")
-                analysis.narrative_score = scores.get("narrative")
-                analysis.news_score = scores.get("news")
-                analysis.module_details = {
-                    "scores": scores,
-                    "revenue": forensics_details.get("revenue", {}),
-                    "cashflow": forensics_details.get("cashflow", {}),
-                    "earnings": forensics_details.get("earnings", {}),
-                    "debt": forensics_details.get("debt", {}),
-                    "narrative": {"snapshots": narrative_snapshot_data},
-                }
-                await session.commit()
-            except Exception as e:
-                logger.error(f"Stage 6 failed for {company.ticker}: {e}")
-                await session.rollback()
-                analysis.status = "failed"
-                await session.commit()
-                return
-
-            # Stage 7
-            await update_status(session, analysis_id, "Generating report...")
-            report_content = ""
-            try:
-                report_content = await ReportGenerator().generate_report(
-                    company, analysis, all_flags, narrative_snapshots
-                )
-            except Exception as e:
-                logger.error(f"Stage 7 failed for {company.ticker}: {e}")
-                report_content = "Report generation failed. Raw scores are available above."
-
-            rep = Report(
-                company_id=company_id,
-                analysis_id=analysis_id,
-                content=report_content
-            )
-            session.add(rep)
-            
-            analysis.status = "complete"
-            company.last_analyzed = datetime.utcnow()
-            await session.commit()
-
-        except Exception as e:
-            logger.error(f"Critical error in analysis pipeline for {analysis_id}: {e}")
-            await session.rollback()
-            if 'analysis' in locals() and analysis:
-                analysis.status = "failed"
-                await session.commit()
+        analysis.status = "complete"
+        company.last_analyzed = datetime.utcnow()
+        await session.commit()

@@ -25,10 +25,11 @@ Follow these documents unless explicitly overruled by the owner. Decisions in
 is authoritative for concrete rules/formulas/conventions; the owner overrides both.
 Amendments are explicit and dated — never silent behavioral changes inside a feature commit.
 
-> **Scheduled amendment:** ADR-005/006 will change the scoring rules below (weight
-> renormalization instead of neutral-50 fill, and a temporary narrative-excluded weight
-> vector). That edit lands in **Phase 3**, alongside the code. Until then, the scoring rules
-> as written below still describe the current code.
+> **Phase 3 amendment (2026-06-14):** ADR-005/006's scoring changes have landed — weight
+> renormalization replaces neutral-50 fill, and `narrative` is temporarily excluded from
+> the weight vector pending a real transcript pipeline. See "Fraud Score Weights" under
+> Forensics Engine — Algorithms for the current rules, and Error Handling rule 2a for how
+> this interacts with the existing per-module 50.0 fallback.
 
 ---
 
@@ -391,17 +392,65 @@ Red flag:
   debt > 40% growth, revenue flat or declining → HIGH
 ```
 
-### Fraud Score Weights (must sum to exactly 1.0):
+### Fraud Score Weights — Phase 3 amendment (2026-06-14, ADR-005/006)
+
+`narrative` is **temporarily excluded** from the weight vector. The current narrative
+pipeline derives statements from news headlines, not management transcripts — until a
+real transcript pipeline exists (Horizon 2), `narrative_score` is still computed and
+displayed, but carries zero weight in `integrity_score`. The remaining 5 modules are
+renormalized from their original weights (financial 0.30, cashflow 0.20, governance 0.15,
+earnings 0.15, news 0.10 — summing to 0.90) by ×(1/0.9):
+
 ```python
-weights = {
-    "financial":   0.30,
-    "cashflow":    0.20,
-    "governance":  0.15,
-    "earnings":    0.15,
-    "narrative":   0.10,
-    "news":        0.10,
-}
+# backend/app/core/scoring/fraud_scorer.py
+BASE_WEIGHTS: dict[str, float] = {
+    "financial":   0.3333,
+    "cashflow":    0.2222,
+    "governance":  0.1667,
+    "earnings":    0.1667,
+    "news":        0.1111,
+}  # sum = 1.0000; narrative intentionally absent
 ```
+
+**Renormalization rule ("no dilution by neutral fill"):**
+```
+available = { k: scores[k] for k in BASE_WEIGHTS if scores.get(k) is not None }
+integrity_score = round(
+    sum(BASE_WEIGHTS[k] * v for k, v in available.items())
+    / sum(BASE_WEIGHTS[k] for k in available),
+    1
+)
+```
+
+**Absence ≠ neutral.** A module key that is `None` or missing from `scores` means its
+stage produced **no real signal** (network/AI failure, zero financial periods, etc.) and
+is dropped from both the numerator and denominator above — it is NOT filled with `50.0`.
+A module that legitimately computed exactly `50.0` from real data is still "available" and
+weighted normally. This None-vs-value distinction is produced by `analysis_worker.py`'s
+per-stage fallbacks (see Analysis Pipeline below), not by `fraud_scorer.py` itself.
+
+**Confidence tier.** `compute_integrity_score(scores, period_count)` returns
+`(integrity_score, confidence)`. Given `available_count` = number of the 5 `BASE_WEIGHTS`
+modules with real signal, and `period_count` = number of `FinancialData` periods fetched:
+```
+available_count <= 2                       → "low"
+available_count == 5 AND period_count >= 3  → "high"
+otherwise                                   → "medium"
+```
+These thresholds are Phase 3's initial cutoffs — tunable later without revisiting the
+renormalization formula above. `confidence` is persisted at
+`AnalysisResult.module_details.confidence`.
+
+**AI provenance (ADR-004).** `governance` and `narrative` are score-bearing AI calls and
+run at `temperature=0` with a pinned `model_id` (`gemini-1.5-flash`), with prompts and raw
+responses persisted for auditability:
+- `module_details.governance.provenance` → `{model_id, prompt, raw_response}`
+- `module_details.narrative.provenance` → list of `{period, model_id, prompt, raw_response}`, one per statement
+- `module_details.narrative.statements_used` → count of statements that produced a snapshot
+
+**News** remains a minor signal (weight `0.1111` post-renormalization) and always has
+SOME value — `fetch_news_sentiment` falls back to `50.0` on failure, unchanged from
+before Phase 3.
 
 ### Risk classification:
 ```
@@ -422,26 +471,37 @@ Stage 1: "Fetching financial data..."
   → Save FinancialData records
 
 Stage 2: "Running financial forensics..."
-  → forensics_runner.run_forensics(financial_data)
-  → Returns results from all 4 modules
+  → forensics_runner.run_forensics(financial_data) — all 4 modules
+  → Save RedFlag records from forensic modules
+  → On failure or zero financial periods: financial/cashflow/earnings/debt = None
+    (excluded + renormalized — see Fraud Score Weights)
 
-Stage 3: "Analyzing cash flow patterns..."
-  → (included in stage 2 via forensics_runner)
-
-Stage 4: "Evaluating governance indicators..."
-  → news_aggregator.fetch_headlines(ticker)
-  → governance_scorer.analyze(headlines)
+Stage 3: "Evaluating governance indicators..."
+  → news_aggregator.fetch_news_text(ticker)
+  → governance_scorer.analyze(news_text) — temperature=0, returns
+    (score, flags, provenance)
   → Save governance events as RedFlag records (flag_type="governance")
+  → module_details.governance.provenance ← provenance
+  → On failure: governance = None
 
-Stage 5: "Processing narrative consistency..."
-  → consistency_engine.analyze(statements)
+Stage 4: "Processing narrative consistency..."
+  → news_aggregator.fetch_news_statements(ticker, limit=5)
+  → If < 2 statements: narrative = 50.0, Gemini not called
+  → Else consistency_engine.analyze(statements) — temperature=0, returns
+    (score, snapshots, contradictions, provenance)
   → Save NarrativeSnapshot records
   → Contradictions (score_delta > 0.6) saved as RedFlag records
+  → module_details.narrative.{snapshots, statements_used, provenance} ← above
+  → On failure: narrative = 50.0
+
+Stage 5: "Computing Integrity Score..."
+  → news_aggregator.fetch_news_sentiment()
+  → On failure: news = 50.0
 
 Stage 6: "Computing Integrity Score..."
-  → news_aggregator.fetch_news_sentiment()
-  → fraud_scorer.compute_integrity_score(all_scores)
-  → Update AnalysisResult with all scores and status
+  → fraud_scorer.compute_integrity_score(scores, period_count) → (integrity_score, confidence)
+  → Pure computation + DB write, no network calls
+  → Update AnalysisResult with all scores, confidence, and module_details
 
 Stage 7: "Generating report..."
   → report_generator.generate_report(company, analysis, flags, snapshots)
@@ -450,9 +510,10 @@ Stage 7: "Generating report..."
   → Set AnalysisResult.status = "complete"
 ```
 
-**Each stage wrapped in individual try/except.
-Pipeline never aborts on a single stage failure.
-Gemini failure always returns 50.0 (neutral) — never crashes.**
+**Each stage wrapped in its own try/except, plus an outer per-stage safety net in the
+orchestrator. Pipeline never aborts on a single stage failure — every started analysis
+ends with status = "complete" (status = "failed" is retired). Governance/narrative
+Gemini failures fall back to a neutral score — never crash.**
 
 ---
 
@@ -483,6 +544,15 @@ DELETE /watchlist/{ticker}         remove company
 
 1. All forensic modules: if a field is None, skip that period — never crash
 2. If ALL periods have None for a required field: return score 50.0 (neutral)
+2a. Rule 2 is a **module-internal** fallback (unchanged by Phase 3): it fires *inside* a
+    forensic module when the module ran but had incomplete data, and that 50.0
+    contributes to the module's own score like any other value. This is a different
+    layer from the Phase 3 orchestrator-level renormalization in "Fraud Score Weights"
+    above: if a module's entire stage fails, or there are zero `FinancialData` periods at
+    all, `analysis_worker.py` records that module's score as `None` — excluded from
+    `integrity_score` and renormalized, not diluted with 50.0. The two rules don't
+    conflict; they answer different questions ("the module ran but the data was thin" vs.
+    "the module produced nothing at all").
 3. Gemini API failure: log error, return None to caller, caller returns 50.0
 4. Bad ticker (yfinance returns nothing): raise HTTP 404
 5. Free tier limit (≥5 analyses/month): return HTTP 403 code LIMIT_REACHED
