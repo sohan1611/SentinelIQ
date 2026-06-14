@@ -21,6 +21,25 @@
   --ease-base: cubic-bezier(0.4, 0.0, 0.2, 1.0);
 }
 
+/*
+ * Color and type-scale tokens live in frontend/lib/theme/tokens.ts (the
+ * single source of truth, consumed by tailwind.config.ts and by any
+ * Chart.js/canvas code that can't read Tailwind classes). Most type sizes
+ * map to Tailwind's default scale (text-xs/sm/base/lg/xl/2xl); tokens.ts
+ * adds 2xs, md, display, gauge and gauge-lg for sizes Tailwind has no
+ * default for.
+ */
+
+@keyframes modal-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modal-panel-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 @layer base {
   body {
     @apply bg-canvas text-text-primary font-sans antialiased;

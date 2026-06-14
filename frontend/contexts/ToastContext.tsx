@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 
-export type ToastType = "success" | "info";
+export type ToastType = "success" | "info" | "error";
 
 interface ToastMessage {
   id: string;
@@ -15,6 +15,9 @@ interface ToastContextValue {
 }
 
 const ToastContext = createContext<ToastContextValue | undefined>(undefined);
+
+const MAX_TOASTS = 3;
+const AUTO_DISMISS_MS = 3000;
 
 export function useToast() {
   const context = useContext(ToastContext);
@@ -29,7 +32,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
   const showToast = useCallback((message: string, type: ToastType = "success") => {
     const id = Math.random().toString(36).substring(2, 9);
-    setToasts((prev) => [...prev, { id, message, type }]);
+    setToasts((prev) => [...prev, { id, message, type }].slice(-MAX_TOASTS));
   }, []);
 
   const removeToast = useCallback((id: string) => {
@@ -48,56 +51,79 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
+type ToastPhase = "enter" | "visible" | "exit";
+
+const TOAST_ICONS: Record<ToastType, React.ReactNode> = {
+  success: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M13.3334 4L6.00008 11.3333L2.66675 8" stroke="#1A6B3C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+  info: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="8" cy="8" r="6.66667" stroke="#1C3558" strokeWidth="1.5" />
+      <path d="M8 10.6667V8" stroke="#1C3558" strokeWidth="1.5" strokeLinecap="round" />
+      <circle cx="8" cy="5.33333" r="1" fill="#1C3558" />
+    </svg>
+  ),
+  error: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="8" cy="8" r="6.66667" stroke="#B03028" strokeWidth="1.5" />
+      <path d="M8 5.33333V8.66667" stroke="#B03028" strokeWidth="1.5" strokeLinecap="round" />
+      <circle cx="8" cy="10.6667" r="1" fill="#B03028" />
+    </svg>
+  ),
+};
+
+const TOAST_PHASE_STYLE: Record<ToastPhase, { opacity: number; transform: string; transition: string }> = {
+  enter: {
+    opacity: 0,
+    transform: "translateX(16px)",
+    transition: "none",
+  },
+  visible: {
+    opacity: 1,
+    transform: "translateX(0) translateY(0)",
+    transition: "opacity var(--duration-base) var(--ease-out), transform var(--duration-base) var(--ease-out)",
+  },
+  exit: {
+    opacity: 0,
+    transform: "translateY(8px)",
+    transition: "opacity var(--duration-fast) var(--ease-in), transform var(--duration-fast) var(--ease-in)",
+  },
+};
+
 function ToastItem({ toast, onRemove }: { toast: ToastMessage; onRemove: (id: string) => void }) {
-  const [isVisible, setIsVisible] = useState(false);
+  const [phase, setPhase] = useState<ToastPhase>("enter");
 
   useEffect(() => {
-    // Trigger entrance animation
-    const raf = requestAnimationFrame(() => setIsVisible(true));
-    
-    // Auto dismiss after 4s
-    const timer = setTimeout(() => {
-      setIsVisible(false);
-      // Wait for exit animation
-      setTimeout(() => onRemove(toast.id), 150);
-    }, 4000);
-
+    const raf = requestAnimationFrame(() => setPhase("visible"));
+    const dismissTimer = setTimeout(() => setPhase("exit"), AUTO_DISMISS_MS);
     return () => {
       cancelAnimationFrame(raf);
-      clearTimeout(timer);
+      clearTimeout(dismissTimer);
     };
-  }, [toast.id, onRemove]);
+  }, []);
+
+  useEffect(() => {
+    if (phase !== "exit") return;
+    const removeTimer = setTimeout(() => onRemove(toast.id), 150);
+    return () => clearTimeout(removeTimer);
+  }, [phase, toast.id, onRemove]);
+
+  const style = TOAST_PHASE_STYLE[phase];
 
   return (
     <div
-      className="bg-[#FFFFFF] border border-[#E3DFD8] rounded-[8px] w-[320px] px-4 py-3 flex items-center shadow-[0_4px_12px_rgba(0,0,0,0.05)]"
+      className="bg-surface border border-border rounded-card w-[320px] px-4 py-3 flex items-center"
       style={{
-        opacity: isVisible ? 1 : 0,
-        transform: isVisible ? "translateY(0)" : "translateY(16px)",
-        transition: isVisible 
-          ? "opacity var(--duration-base) var(--ease-out), transform var(--duration-base) var(--ease-out)"
-          : "opacity var(--duration-fast) var(--ease-in), transform var(--duration-fast) var(--ease-in)",
-        // on exit, it shifts down 8px, but our default state is translateY(16px) for enter. 
-        // to be strictly adhering to exit being translateY(8px), we'd need another state.
-        // using 16px is fine and robust.
+        opacity: style.opacity,
+        transform: style.transform,
+        transition: style.transition,
       }}
     >
-      <div className="shrink-0 mr-3">
-        {toast.type === "success" ? (
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M13.3334 4L6.00008 11.3333L2.66675 8" stroke="#1A6B3C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        ) : (
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="8" cy="8" r="6.66667" stroke="#1C3558" strokeWidth="1.5"/>
-            <path d="M8 10.6667V8" stroke="#1C3558" strokeWidth="1.5" strokeLinecap="round"/>
-            <circle cx="8" cy="5.33333" r="1" fill="#1C3558"/>
-          </svg>
-        )}
-      </div>
-      <div className="font-sans text-[13px] font-medium text-[#1A1A18]">
-        {toast.message}
-      </div>
+      <div className="shrink-0 mr-3">{TOAST_ICONS[toast.type]}</div>
+      <div className="font-sans text-sm font-medium text-text-primary">{toast.message}</div>
     </div>
   );
 }

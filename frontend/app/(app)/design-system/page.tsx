@@ -1,3 +1,5 @@
+"use client";
+
 import * as React from "react";
 import { IntegrityScoreGauge } from "@/components/charts/IntegrityGauge";
 import { Badge } from "@/components/ui/Badge";
@@ -10,6 +12,11 @@ import { CompanyCard } from "@/components/shared/CompanyCard";
 import { RecommendationBox } from "@/components/modules/RecommendationBox";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { Input } from "@/components/ui/Input";
+import { Modal } from "@/components/ui/Modal";
+import { Tooltip } from "@/components/ui/Tooltip";
+import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
+import { ChartFrame } from "@/components/ui/ChartFrame";
 
 // Helper component for the section header
 function SectionHeader({ title }: { title: string }) {
@@ -36,7 +43,38 @@ function VariantBlock({ label, children, width = "auto" }: { label: string, chil
   );
 }
 
+interface SampleCompanyRow {
+  name: string;
+  ticker: string;
+  score: string;
+  risk: "high" | "moderate" | "strong";
+}
+
+const SAMPLE_COMPANY_ROWS: SampleCompanyRow[] = [
+  { name: "Wirecard AG", ticker: "WDI.DE", score: "31", risk: "high" },
+  { name: "Apple Inc.", ticker: "AAPL", score: "88", risk: "strong" },
+  { name: "Generic Co.", ticker: "GCO", score: "56", risk: "moderate" },
+];
+
+const SAMPLE_COLUMNS: DataTableColumn<SampleCompanyRow>[] = [
+  { key: "name", header: "Company", width: "40%" },
+  { key: "ticker", header: "Ticker", className: "font-mono text-navy" },
+  {
+    key: "score",
+    header: "Score",
+    align: "right",
+    className: "font-mono font-bold",
+  },
+  {
+    key: "risk",
+    header: "Risk",
+    render: (row) => <Badge risk={row.risk}>{row.risk}</Badge>,
+  },
+];
+
 export default function DesignSystemPage() {
+  const [modalOpen, setModalOpen] = React.useState(false);
+
   return (
     <div className="min-h-screen bg-canvas p-10 font-sans">
       <div className="max-w-[1200px] mx-auto">
@@ -243,6 +281,92 @@ export default function DesignSystemPage() {
               <RedFlagItem severity="moderate" date="" description="" type="" loading={true} />
             </div>
           </VariantBlock>
+        </div>
+
+        {/* 12 — INPUT */}
+        <SectionHeader title="12 — INPUT" />
+        <div className="flex flex-wrap items-start justify-start gap-8">
+          <VariantBlock label="Default" width="w-[280px]">
+            <Input label="Company Name" placeholder="Search by name or ticker" />
+          </VariantBlock>
+          <VariantBlock label="With Hint" width="w-[280px]">
+            <Input label="Email" placeholder="you@company.com" hint="We'll never share your email." />
+          </VariantBlock>
+          <VariantBlock label="Error State" width="w-[280px]">
+            <Input label="Password" type="password" defaultValue="123" error="Password must be at least 8 characters." />
+          </VariantBlock>
+          <VariantBlock label="Disabled" width="w-[280px]">
+            <Input label="Ticker" defaultValue="WDI.DE" disabled />
+          </VariantBlock>
+        </div>
+
+        {/* 13 — MODAL */}
+        <SectionHeader title="13 — MODAL" />
+        <VariantBlock label="Click to open dialog" width="w-full">
+          <Button variant="secondary" onClick={() => setModalOpen(true)}>Open Modal</Button>
+          <Modal
+            isOpen={modalOpen}
+            onClose={() => setModalOpen(false)}
+            title="Remove from Watchlist"
+            footer={
+              <>
+                <Button variant="secondary" onClick={() => setModalOpen(false)}>Cancel</Button>
+                <Button variant="destructive" onClick={() => setModalOpen(false)}>Remove</Button>
+              </>
+            }
+          >
+            <p>Are you sure you want to remove this company from your watchlist? This action cannot be undone.</p>
+          </Modal>
+        </VariantBlock>
+
+        {/* 14 — TOOLTIP */}
+        <SectionHeader title="14 — TOOLTIP" />
+        <div className="flex flex-wrap items-center justify-start gap-12 py-8">
+          <Tooltip content="Integrity score for the trailing twelve months" side="top">
+            <Badge risk="low">Hover (top)</Badge>
+          </Tooltip>
+          <Tooltip content="Flagged by governance module" side="bottom">
+            <Badge risk="moderate">Hover (bottom)</Badge>
+          </Tooltip>
+          <Tooltip content="Three consecutive quarters of divergence" side="left">
+            <Badge risk="high">Hover (left)</Badge>
+          </Tooltip>
+          <Tooltip content="No red flags detected in this period" side="right">
+            <Badge risk="strong">Hover (right)</Badge>
+          </Tooltip>
+        </div>
+
+        {/* 15 — DATA TABLE */}
+        <SectionHeader title="15 — DATA TABLE" />
+        <div className="flex flex-col gap-8">
+          <VariantBlock label="Populated" width="w-full">
+            <DataTable columns={SAMPLE_COLUMNS} data={SAMPLE_COMPANY_ROWS} getRowKey={(row) => row.ticker} />
+          </VariantBlock>
+          <VariantBlock label="Loading" width="w-full">
+            <DataTable columns={SAMPLE_COLUMNS} data={[]} getRowKey={(row) => row.ticker} isLoading />
+          </VariantBlock>
+          <VariantBlock label="Empty" width="w-full">
+            <DataTable columns={SAMPLE_COLUMNS} data={[]} getRowKey={(row) => row.ticker} />
+          </VariantBlock>
+        </div>
+
+        {/* 16 — CHART FRAME */}
+        <SectionHeader title="16 — CHART FRAME" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <ChartFrame title="Revenue vs. Operating Cash Flow" subtitle="Quarterly, last 8 periods">
+            <div className="flex items-center justify-center h-full font-sans text-sm text-text-muted">
+              Chart.js component — Phase 6
+            </div>
+          </ChartFrame>
+          <ChartFrame
+            title="Debt Trend"
+            subtitle="Total debt / revenue"
+            actions={<Badge risk="moderate">Moderate</Badge>}
+          >
+            <div className="flex items-center justify-center h-full font-sans text-sm text-text-muted">
+              Chart.js component — Phase 6
+            </div>
+          </ChartFrame>
         </div>
 
       </div>

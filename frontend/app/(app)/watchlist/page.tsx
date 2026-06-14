@@ -14,10 +14,12 @@ import { formatScore } from "@/lib/utils/formatNumber"
 import { formatRelativeTime } from "@/lib/utils/formatDate"
 import { ROUTES } from "@/lib/constants/routes"
 import { ApiError } from "@/types/api"
+import { useToast } from "@/contexts/ToastContext"
 
 export default function WatchlistPage() {
   const router = useRouter()
   const { items, isLoading, error, remove } = useWatchlist()
+  const { showToast } = useToast()
   const [removeError, setRemoveError] = useState<string | null>(null)
 
   const handleRemove = async (ticker: string, name: string) => {
@@ -25,6 +27,7 @@ export default function WatchlistPage() {
     setRemoveError(null)
     try {
       await remove(ticker)
+      showToast(`Removed ${name} from watchlist`, "info")
     } catch (err) {
       setRemoveError(err instanceof ApiError ? err.message : "Failed to remove company. Please try again.")
     }
