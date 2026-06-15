@@ -11,11 +11,16 @@ actions** — Claude Code does not perform these.
 Before following the steps below, the following were verified locally and require no
 external accounts:
 
-- `alembic upgrade head` applies cleanly to a fresh Postgres 15 database — produces all 8
-  baseline tables (`users`, `companies`, `financial_data`, `analysis_results`,
-  `red_flags`, `reports`, `watchlist`, `narrative_snapshots`), then `analysis_runs`
-  (migration `0002`), then adds `analysis_runs.counted` (migration `0003`). Chain is
-  linear: `0001 -> 0002 -> 0003 (head)`.
+- `alembic upgrade head --sql` (offline mode, no DB connection) generates the full DDL for
+  the `0001 -> 0002 -> 0003 (head)` chain — all 8 baseline tables (`users`, `companies`,
+  `financial_data`, `analysis_results`, `red_flags`, `reports`, `watchlist`,
+  `narrative_snapshots`), then `analysis_runs` (migration `0002`), then
+  `ALTER TABLE analysis_runs ADD COLUMN counted ...` (migration `0003`). The chain is
+  linear and the generated SQL is well-formed standard Postgres DDL. A live run against an
+  actual Postgres instance was not possible in this sandbox (no Docker daemon, no native
+  Postgres install available) — the start command in step 2 below runs
+  `alembic upgrade head` for real on first deploy, and the post-deploy checklist (step 4)
+  confirms it succeeded via `/health`.
 - `frontend`: `npm run build` succeeds — production build, type checking, and static page
   generation all pass for all 16 routes.
 - `backend/Dockerfile` already exists and matches Render's expected shape (`pip install -r
@@ -30,10 +35,11 @@ external accounts:
 ## 1. Render — managed Postgres
 
 1. New "PostgreSQL" instance, free tier (1GB).
-2. Copy the **Internal Database URL** Render provides. It looks like:
-   `postgresql://USER:PASSWORD@HOST/DBNAME`
-3. **Rewrite the scheme** before using it as `DATABASE_URL` — the app uses the `asyncpg`
-   driver, so it must start with `postgresql+asyncpg://`, not `postgresql://`:
+2. Copy the connection string Render provides (currently labeled "Internal Database URL"
+   in Render's dashboard). It will start with `postgresql://` or `postgres://`.
+3. **Rewrite the scheme** before using it as `DATABASE_URL` — regardless of what Render
+   calls the field or how it formats the URL, this app's `asyncpg` driver requires the
+   scheme to be `postgresql+asyncpg://`:
    ```
    postgresql+asyncpg://USER:PASSWORD@HOST/DBNAME
    ```
