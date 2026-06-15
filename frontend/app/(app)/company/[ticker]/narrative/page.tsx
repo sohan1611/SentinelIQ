@@ -1,151 +1,160 @@
 "use client";
 
-import React from "react";
-import { Badge } from "@/components/ui/Badge";
+import Link from "next/link";
+import { NarrativeTrendChart } from "@/components/charts/NarrativeTrendChart";
 import { NarrativeComparison } from "@/components/modules/NarrativeComparison";
-import { Line } from "react-chartjs-2";
+import { ModuleScoreBadge } from "@/components/modules/ScoreCard";
+import { Badge } from "@/components/ui/Badge";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { useCompanyData } from "@/lib/hooks/useCompanyData";
 
-export default function NarrativePage() {
-  const chartData = {
-    labels: ["Q1 2021", "Q2 2021", "Q3 2021", "Q4 2021", "Q1 2022", "Q2 2022", "Q3 2022", "Q4 2022", "Q1 2023", "Q2 2023", "Q3 2023", "Q4 2023"],
-    datasets: [
-      {
-        label: "Confidence Score %",
-        data: [88, 86, 85, 80, 82, 75, 60, 45, 55, 30, 25, 15],
-        borderColor: "#1C3558",
-        borderWidth: 2,
-        pointRadius: 0,
-        pointHoverRadius: 4,
-        tension: 0.4, // smooth curve
-      },
-    ],
-  };
+function toSentiment(label: string): "OPTIMISTIC" | "CAUTIONARY" | "NEUTRAL" {
+  const upper = label.toUpperCase();
+  if (upper === "OPTIMISTIC" || upper === "CAUTIONARY") return upper;
+  return "NEUTRAL";
+}
 
-  const chartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        backgroundColor: "#FFFFFF",
-        titleColor: "#1A1A18",
-        bodyColor: "#1A1A18",
-        borderColor: "#E3DFD8",
-        borderWidth: 1,
-        titleFont: { family: "Inter", size: 12 },
-        bodyFont: { family: "IBM Plex Mono", size: 12 },
-        padding: 10,
-        cornerRadius: 4,
-        displayColors: false,
-      },
-      annotation: {
-        // Since we don't have chartjs-plugin-annotation installed by default, 
-        // we will manually render the annotations as absolute positioned divs,
-        // or just let the tooltip serve the purpose for now. 
-      }
-    },
-    scales: {
-      x: {
-        grid: { display: false, drawBorder: false },
-        ticks: { font: { family: "IBM Plex Mono", size: 11 }, color: "#7A786F" },
-      },
-      y: {
-        grid: { color: "#E3DFD8", drawBorder: false },
-        border: { dash: [4, 4] },
-        ticks: { font: { family: "IBM Plex Mono", size: 11 }, color: "#7A786F" },
-        min: 0,
-        max: 100,
-      },
-    },
-  };
+function sentimentRisk(sentiment: "OPTIMISTIC" | "CAUTIONARY" | "NEUTRAL"): "strong" | "moderate" | "low" {
+  if (sentiment === "OPTIMISTIC") return "strong";
+  if (sentiment === "CAUTIONARY") return "moderate";
+  return "low";
+}
+
+export default function NarrativePage({ params }: { params: { ticker: string } }) {
+  const ticker = params.ticker;
+  const { company, analysis, isLoading, error } = useCompanyData(ticker);
+
+  if (isLoading) {
+    return (
+      <div className="w-full flex flex-col gap-12 mt-8 pb-16">
+        <section>
+          <Skeleton className="w-48 h-3 mb-4" />
+          <Skeleton className="w-full h-4 mb-2" />
+          <Skeleton className="w-2/3 h-3" />
+        </section>
+        <section className="flex flex-col gap-10">
+          <Skeleton className="w-full h-[160px]" />
+          <Skeleton className="w-full h-[160px]" />
+        </section>
+        <Skeleton className="w-full h-[280px]" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="w-full bg-[#FFFFFF] border border-[#E3DFD8] rounded-[8px] p-10 flex flex-col items-center justify-center text-center mt-8">
+        <div className="font-sans text-[14px] text-[#B03028] mb-1">Couldn&apos;t load this company.</div>
+        <div className="font-sans text-[12px] text-[#7A786F]">{error}</div>
+      </div>
+    );
+  }
+
+  if (!analysis) {
+    return (
+      <div className="w-full bg-[#FFFFFF] border border-[#E3DFD8] rounded-[8px] p-10 flex flex-col items-center text-center mt-8">
+        <div className="font-sans text-[10px] font-medium uppercase tracking-[0.08em] text-[#7A786F] mb-3">
+          NARRATIVE CONSISTENCY
+        </div>
+        <h2 className="font-sans text-[18px] font-semibold text-[#1A1A18] mb-2">
+          {company?.name ?? ticker} hasn&apos;t been analyzed yet
+        </h2>
+        <p className="font-sans text-[13px] text-[#7A786F] max-w-[420px] mb-6">
+          Run an investigation from the overview tab to evaluate narrative consistency across recent management commentary.
+        </p>
+        <Link href={`/company/${ticker}`} className="font-sans text-[13px] text-[#1C3558] font-medium hover:underline">
+          Go to Overview →
+        </Link>
+      </div>
+    );
+  }
+
+  const snapshots = analysis.module_details?.narrative?.snapshots ?? [];
+  const narrativeFlags = analysis.red_flags.filter((f) => f.flag_type === "narrative");
+
+  let summary: string;
+  if (snapshots.length === 0) {
+    summary = "Not enough recent management commentary was available to assess narrative consistency.";
+  } else if (snapshots.length === 1) {
+    summary = "Only one recent management statement was available — not enough to compare tone across periods.";
+  } else if (narrativeFlags.length > 0) {
+    summary = `${narrativeFlags.length} tone shift${narrativeFlags.length === 1 ? "" : "s"} detected across ${snapshots.length} recent statements.`;
+  } else {
+    summary = `Tone is consistent across ${snapshots.length} recent statements — no significant contradictions detected.`;
+  }
+
+  const pairs = snapshots.slice(0, -1).map((prev, i) => {
+    const curr = snapshots[i + 1];
+    const flag = narrativeFlags.find((f) => f.period === curr.period);
+    return { prev, curr, flag };
+  });
 
   return (
     <div className="w-full flex flex-col gap-12 mt-8 pb-16">
-      
+
       {/* SCORE PANEL */}
       <section>
         <div className="flex items-center gap-3 mb-3">
           <h2 className="font-sans text-[10px] font-medium uppercase tracking-[0.08em] text-[#7A786F]">
             NARRATIVE CONSISTENCY
           </h2>
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-[13px] font-medium text-[#C47A14]">55 / 100</span>
-            <Badge risk="moderate">MODERATE RISK</Badge>
-          </div>
+          <ModuleScoreBadge score={analysis.narrative_score} />
         </div>
-        <p className="font-sans text-[14px] text-[#1A1A18] leading-[1.65]">
-          Significant tone shift and contradictory guidance statements detected across Q1 2022 to Q4 2023.
+        <p className="font-sans text-[14px] text-[#1A1A18] leading-[1.65] mb-2">
+          {summary}
+        </p>
+        <p className="font-sans text-[12px] text-[#B0ADA7]">
+          Narrative consistency is shown for reference and does not currently affect the Corporate Integrity Score.
         </p>
       </section>
 
-      {/* COMPARISON BLOCKS */}
-      <section className="flex flex-col gap-10">
-        <NarrativeComparison 
-          left={{
-            period: "Q1 2022",
-            sentiment: "OPTIMISTIC",
-            quote: "Demand remains exceptionally strong across all markets. We see no slowdown on the horizon."
-          }}
-          right={{
-            period: "Q3 2022",
-            sentiment: "CAUTIONARY",
-            quote: "Macroeconomic headwinds have materially weakened near-term demand across key segments."
-          }}
-          contradictionAlert="Significant shift in tone detected across 2 quarters."
-          alertSeverity="moderate"
-        />
-
-        <NarrativeComparison 
-          left={{
-            period: "Q2 2022",
-            sentiment: "OPTIMISTIC",
-            quote: "We reaffirm full-year revenue guidance of €5.4B with high confidence."
-          }}
-          right={{
-            period: "Q4 2022",
-            sentiment: "CAUTIONARY",
-            quote: "Given evolving market conditions, we are withdrawing forward guidance for FY2023."
-          }}
-          contradictionAlert="Guidance withdrawn 2 quarters after reaffirmation."
-          alertSeverity="severe"
-        />
-
-        <NarrativeComparison 
-          left={{
-            period: "Q1 2023",
-            sentiment: "OPTIMISTIC",
-            quote: "Our balance sheet remains robust with €1.9B in cash and liquid assets."
-          }}
-          right={{
-            period: "Q2 2023",
-            sentiment: "CAUTIONARY",
-            quote: "A cash shortfall has been identified following an internal audit review."
-          }}
-          contradictionAlert="Material cash discrepancy emerged within one quarter."
-          alertSeverity="severe"
-        />
-      </section>
+      {/* COMPARISON BLOCKS / SINGLE STATEMENT / EMPTY STATE */}
+      {snapshots.length === 0 ? (
+        <div className="bg-[#FFFFFF] border border-[#E3DFD8] rounded-[8px] p-6 flex items-center gap-3">
+          <div className="w-2 h-2 rounded-full bg-risk-strong shrink-0" />
+          <span className="font-sans text-[13px] text-[#1A1A18]">
+            No recent management statements were found for this company.
+          </span>
+        </div>
+      ) : snapshots.length === 1 ? (
+        <section>
+          <div className="text-[11px] font-sans font-medium uppercase text-text-secondary mb-4 tracking-[0.04em]">
+            Management Statement
+          </div>
+          <div className="border-t border-b border-border p-4 bg-surface flex flex-col items-start">
+            <div className="font-mono text-[11px] text-text-secondary mb-3">{snapshots[0].period}</div>
+            <p className="font-sans text-[14px] text-text-primary italic mb-4 leading-relaxed">
+              &quot;{snapshots[0].statement_text}&quot;
+            </p>
+            <Badge risk={sentimentRisk(toSentiment(snapshots[0].sentiment_label))}>
+              {toSentiment(snapshots[0].sentiment_label)}
+            </Badge>
+          </div>
+        </section>
+      ) : (
+        <section className="flex flex-col gap-10">
+          {pairs.map(({ prev, curr, flag }, idx) => (
+            <NarrativeComparison
+              key={idx}
+              left={{
+                period: prev.period,
+                quote: prev.statement_text,
+                sentiment: toSentiment(prev.sentiment_label),
+              }}
+              right={{
+                period: curr.period,
+                quote: curr.statement_text,
+                sentiment: toSentiment(curr.sentiment_label),
+              }}
+              contradictionAlert={flag?.description}
+              alertSeverity={flag ? (flag.severity === "high" ? "severe" : "moderate") : undefined}
+            />
+          ))}
+        </section>
+      )}
 
       {/* SENTIMENT TREND CHART */}
-      <section>
-        <div className="font-sans text-[10px] font-medium uppercase tracking-[0.08em] text-[#7A786F] mb-6">
-          MANAGEMENT SENTIMENT OVER TIME
-        </div>
-
-        <div className="bg-[#FFFFFF] border border-[#E3DFD8] rounded-[8px] p-[20px] h-[300px] relative">
-          <Line data={chartData} options={chartOptions} />
-          
-          {/* Custom Annotations (Positioned Manually for visual effect) */}
-          <div className="absolute flex flex-col items-center" style={{ left: '65%', top: '55%' }}>
-            <div className="w-2 h-2 rounded-full bg-[#B03028]" />
-            <div className="mt-1 font-sans text-[10px] text-[#B03028]">Guidance withdrawn</div>
-          </div>
-          <div className="absolute flex flex-col items-center" style={{ left: '80%', top: '70%' }}>
-            <div className="w-2 h-2 rounded-full bg-[#B03028]" />
-            <div className="mt-1 font-sans text-[10px] text-[#B03028]">Audit review</div>
-          </div>
-        </div>
-      </section>
+      <NarrativeTrendChart snapshots={snapshots} />
 
     </div>
   );

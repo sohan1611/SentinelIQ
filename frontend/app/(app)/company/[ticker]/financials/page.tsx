@@ -4,26 +4,9 @@ import Link from "next/link";
 import { CashFlowChart } from "@/components/charts/CashFlowChart";
 import { DebtTrendChart } from "@/components/charts/DebtTrendChart";
 import { RevenueQualityChart } from "@/components/charts/RevenueQualityChart";
-import { Badge } from "@/components/ui/Badge";
+import { ModuleScoreBadge } from "@/components/modules/ScoreCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useCompanyData } from "@/lib/hooks/useCompanyData";
-import { formatScore } from "@/lib/utils/formatNumber";
-import { getRiskLabel, getRiskLevel } from "@/lib/utils/riskLabel";
-import { getScoreColor } from "@/lib/utils/scoreColor";
-
-function ModuleScoreBadge({ score }: { score: number | null | undefined }) {
-  if (score === null || score === undefined) {
-    return <Badge risk="analyzing">NO SIGNAL</Badge>;
-  }
-  return (
-    <div className="flex items-center gap-2">
-      <span className="font-mono text-sm font-medium" style={{ color: getScoreColor(score) }}>
-        {formatScore(score)} / 100
-      </span>
-      <Badge risk={getRiskLevel(score)}>{getRiskLabel(score).toUpperCase()}</Badge>
-    </div>
-  );
-}
 
 export default function FinancialsPage({ params }: { params: { ticker: string } }) {
   const ticker = params.ticker;

@@ -6,7 +6,7 @@ import { IntegrityScoreGauge } from "@/components/charts/IntegrityGauge";
 import { Button } from "@/components/ui/Button";
 import { ModuleScoreCard } from "@/components/modules/ScoreCard";
 import { RedFlagTimeline } from "@/components/charts/RedFlagTimeline";
-import { RedFlagItem, Severity } from "@/components/modules/RedFlagItem";
+import { RedFlagItem } from "@/components/modules/RedFlagItem";
 import { useStaggeredReveal } from "@/hooks/useStaggeredReveal";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useToast } from "@/contexts/ToastContext";
@@ -16,8 +16,8 @@ import { useAnalysis } from "@/lib/hooks/useAnalysis";
 import { getScoreColor } from "@/lib/utils/scoreColor";
 import { formatScore } from "@/lib/utils/formatNumber";
 import { formatDate } from "@/lib/utils/formatDate";
+import { normalizeSeverity, flagDate } from "@/lib/utils/redFlag";
 import { ApiError } from "@/types/api";
-import type { RedFlag } from "@/types/analysis";
 
 type ScoreKey =
   | "financial_score"
@@ -62,17 +62,6 @@ const MODULE_CARDS: { key: ScoreKey; label: string; summary: string; tab: string
     tab: "narrative",
   },
 ];
-
-function normalizeSeverity(severity: string): Severity {
-  const s = severity.toLowerCase();
-  if (s === "severe" || s === "high" || s === "moderate") return s;
-  return "moderate";
-}
-
-function flagDate(flag: RedFlag): string {
-  if (flag.event_date) return formatDate(flag.event_date);
-  return flag.period ?? "—";
-}
 
 export default function CompanyOverviewPage({ params }: { params: { ticker: string } }) {
   const ticker = params.ticker;

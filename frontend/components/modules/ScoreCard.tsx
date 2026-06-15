@@ -1,7 +1,11 @@
 import * as React from "react";
 import { Card } from "../ui/Card";
 import { Skeleton } from "../ui/Skeleton";
+import { Badge } from "../ui/Badge";
 import Link from "next/link";
+import { formatScore } from "@/lib/utils/formatNumber";
+import { getRiskLabel, getRiskLevel } from "@/lib/utils/riskLabel";
+import { getScoreColor as getScoreHexColor } from "@/lib/utils/scoreColor";
 
 interface ModuleScoreCardProps {
   label: string;
@@ -58,5 +62,19 @@ export function ModuleScoreCard({ label, score, summary, href = "#", loading }: 
         </div>
       </div>
     </Card>
+  );
+}
+
+export function ModuleScoreBadge({ score }: { score: number | null | undefined }) {
+  if (score === null || score === undefined) {
+    return <Badge risk="analyzing">NO SIGNAL</Badge>;
+  }
+  return (
+    <div className="flex items-center gap-2">
+      <span className="font-mono text-sm font-medium" style={{ color: getScoreHexColor(score) }}>
+        {formatScore(score)} / 100
+      </span>
+      <Badge risk={getRiskLevel(score)}>{getRiskLabel(score).toUpperCase()}</Badge>
+    </div>
   );
 }
