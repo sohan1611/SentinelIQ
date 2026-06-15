@@ -12,6 +12,7 @@ def test_analysis_run_record_round_trips_from_model():
         company_id=uuid.uuid4(),
         analysis_result_id=uuid.uuid4(),
         run_at=datetime.utcnow(),
+        counted=True,
     )
 
     record = AnalysisRunRecord.model_validate(run)
@@ -21,6 +22,7 @@ def test_analysis_run_record_round_trips_from_model():
     assert record.company_id == run.company_id
     assert record.analysis_result_id == run.analysis_result_id
     assert record.run_at == run.run_at
+    assert record.counted is True
 
 
 def test_analysis_run_registered_on_base_metadata():
@@ -29,5 +31,5 @@ def test_analysis_run_registered_on_base_metadata():
     assert "analysis_runs" in Base.metadata.tables
     table = Base.metadata.tables["analysis_runs"]
     assert {c.name for c in table.columns} == {
-        "id", "user_id", "company_id", "analysis_result_id", "run_at",
+        "id", "user_id", "company_id", "analysis_result_id", "run_at", "counted",
     }

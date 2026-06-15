@@ -37,3 +37,14 @@ def test_free_tier_usage_query_counts_analysis_runs_by_user_and_month():
     # which both under- and over-counted usage. Neither table should appear here.
     assert "watchlist" not in sql
     assert "analysis_results" not in sql
+
+
+def test_free_tier_usage_query_excludes_uncounted_cache_hit_runs():
+    # ADR-013 / Ruling A: a cache-hit re-open still logs an AnalysisRun (audit
+    # trail, ADR-007) with counted=false, and must not consume the free-tier
+    # quota -- only counted=true (fresh-computation) rows are counted.
+    user_id = uuid.uuid4()
+    since = datetime(2026, 6, 1)
+    sql = str(_free_tier_usage_query(user_id, since))
+
+    assert "analysis_runs.counted" in sql

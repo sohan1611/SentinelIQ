@@ -37,6 +37,15 @@ Amendments are explicit and dated — never silent behavioral changes inside a f
 > and the Gemini call is skipped entirely. See "Analysis Pipeline — 7 Stages" Stage 3 and
 > Error Handling rule 2b for the full rule and its threshold.
 
+> **Phase 10 amendment (2026-06-16):** Per ADR-013 (Ruling A), `AnalysisRun` gained a
+> `counted: bool` column (`server_default=true`, Alembic `0003`). `POST /analysis/run`
+> sets `counted=False` on a cache-hit re-open (`is_cache_hit = analysis is not None`,
+> captured before the cache-miss branch reassigns `analysis`) and `counted=True` on a
+> fresh computation. `_free_tier_usage_query` now adds `AnalysisRun.counted.is_(True)` —
+> only fresh computations consume the 5/month free-tier quota; cache-hit re-opens are
+> still logged as `AnalysisRun` rows for the audit trail (ADR-007) but don't decrement it.
+> The `FREE_TIER_MONTHLY_LIMIT = 5` value itself is unchanged.
+
 ---
 
 ## Git Commit Identity — MANDATORY

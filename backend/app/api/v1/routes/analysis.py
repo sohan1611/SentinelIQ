@@ -21,10 +21,16 @@ ANALYSIS_CACHE_TTL = timedelta(hours=6)
 
 
 def _free_tier_usage_query(user_id, since):
-    """AnalysisRun rows are the user-scoped audit/metering log (ADR-007)."""
+    """AnalysisRun rows are the user-scoped audit/metering log (ADR-007).
+
+    Only counted=true rows (fresh computations) consume quota. A cache-hit
+    re-open still logs an AnalysisRun for the audit trail but with
+    counted=false, so it's excluded here (ADR-013 / Ruling A).
+    """
     return select(func.count(AnalysisRun.id)).where(
         AnalysisRun.user_id == user_id,
         AnalysisRun.run_at >= since,
+        AnalysisRun.counted.is_(True),
     )
 
 
@@ -64,6 +70,7 @@ async def run_analysis(
         .limit(1)
     )
     analysis = cached_res.scalars().first()
+    is_cache_hit = analysis is not None
 
     if not analysis:
         analysis = AnalysisResult(
@@ -77,10 +84,13 @@ async def run_analysis(
         # Trigger background task
         background_tasks.add_task(run_full_analysis, company.id, analysis.id)
 
+    # ADR-013 / Ruling A: a cache-hit re-open is still logged (audit trail,
+    # ADR-007) but counted=false so it doesn't consume the free-tier quota.
     db.add(AnalysisRun(
         user_id=current_user.id,
         company_id=company.id,
         analysis_result_id=analysis.id,
+        counted=not is_cache_hit,
     ))
     await db.commit()
 

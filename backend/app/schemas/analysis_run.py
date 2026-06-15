@@ -8,6 +8,7 @@ class AnalysisRunRecord(BaseModel):
     company_id: UUID
     analysis_result_id: UUID
     run_at: datetime
+    counted: bool
 
     class Config:
         from_attributes = True
