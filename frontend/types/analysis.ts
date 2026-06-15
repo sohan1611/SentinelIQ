@@ -59,6 +59,7 @@ export interface ModuleScores {
 
 export interface ModuleDetails {
   scores?: ModuleScores;
+  confidence?: "low" | "medium" | "high";
   revenue?: {
     divergences?: DivergencePoint[];
     recv_ratios?: ReceivablesRatioPoint[];

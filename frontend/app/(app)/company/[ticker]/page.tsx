@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
 import { IntegrityScoreGauge } from "@/components/charts/IntegrityGauge";
 import { Button } from "@/components/ui/Button";
 import { ModuleScoreCard } from "@/components/modules/ScoreCard";
@@ -9,15 +8,13 @@ import { RedFlagTimeline } from "@/components/charts/RedFlagTimeline";
 import { RedFlagItem } from "@/components/modules/RedFlagItem";
 import { useStaggeredReveal } from "@/hooks/useStaggeredReveal";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { useToast } from "@/contexts/ToastContext";
-import { addToWatchlist } from "@/lib/api/watchlist";
+import { useAddToWatchlist } from "@/lib/hooks/useAddToWatchlist";
 import { useCompanyData } from "@/lib/hooks/useCompanyData";
 import { useAnalysis } from "@/lib/hooks/useAnalysis";
 import { getScoreColor } from "@/lib/utils/scoreColor";
 import { formatScore } from "@/lib/utils/formatNumber";
 import { formatDate } from "@/lib/utils/formatDate";
 import { normalizeSeverity, flagDate } from "@/lib/utils/redFlag";
-import { ApiError } from "@/types/api";
 
 type ScoreKey =
   | "financial_score"
@@ -65,30 +62,13 @@ const MODULE_CARDS: { key: ScoreKey; label: string; summary: string; tab: string
 
 export default function CompanyOverviewPage({ params }: { params: { ticker: string } }) {
   const ticker = params.ticker;
-  const { showToast } = useToast();
-  const [isAdding, setIsAdding] = useState(false);
 
   const { company, analysis, isLoading, error, refetch } = useCompanyData(ticker);
   const { status: analysisStatus, isRunning, error: analysisError, start } = useAnalysis(refetch);
+  const { isAdding, add: handleAddToWatchlist } = useAddToWatchlist(ticker);
 
   const isLoaded = !isLoading;
   const { styles: moduleStyles, showSkeletons, skeletonStyle } = useStaggeredReveal(4, 40, isLoaded);
-
-  const handleAddToWatchlist = async () => {
-    setIsAdding(true);
-    try {
-      await addToWatchlist(ticker);
-      showToast(`Added ${ticker} to watchlist`, "success");
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
-        showToast(`${ticker} is already on your watchlist`, "info");
-      } else {
-        showToast(err instanceof ApiError ? err.message : "Failed to add to watchlist.", "error");
-      }
-    } finally {
-      setIsAdding(false);
-    }
-  };
 
   const periodCount = analysis
     ? Math.max(
@@ -228,7 +208,7 @@ export default function CompanyOverviewPage({ params }: { params: { ticker: stri
                 <Link href={`/company/${ticker}/report`} className="w-full">
                   <Button variant="primary" className="w-full">View Full Report</Button>
                 </Link>
-                <Button variant="secondary" className="w-full">Export PDF</Button>
+                <Button variant="secondary" className="w-full" onClick={() => window.print()}>Export PDF</Button>
                 <button
                   onClick={handleAddToWatchlist}
                   disabled={isAdding}

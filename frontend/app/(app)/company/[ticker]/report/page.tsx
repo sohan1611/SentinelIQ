@@ -1,146 +1,185 @@
 "use client";
 
-import React from "react";
+import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { RecommendationBox } from "@/components/modules/RecommendationBox";
+import { ReportSection } from "@/components/modules/ReportSection";
+import { buildForensicsCsv, downloadCsv } from "@/lib/utils/exportCsv";
+import { useAddToWatchlist } from "@/lib/hooks/useAddToWatchlist";
+import { useCompanyData } from "@/lib/hooks/useCompanyData";
+import { useReport } from "@/lib/hooks/useReport";
+import { formatDate } from "@/lib/utils/formatDate";
+import { formatScore } from "@/lib/utils/formatNumber";
+import { getRiskLevel, getRiskLabel } from "@/lib/utils/riskLabel";
+import { getScoreColor } from "@/lib/utils/scoreColor";
+import type { AnalysisResultWithFlags } from "@/types/analysis";
+
+function buildRecommendation(analysis: AnalysisResultWithFlags): { variant: "standard" | "action-required"; body: string } {
+  const riskLevel = getRiskLevel(analysis.integrity_score ?? 0);
+  const flagCount = analysis.red_flags.length;
+  const confidence = analysis.module_details?.confidence;
+  const isActionRequired = riskLevel === "severe" || riskLevel === "high";
+
+  let body: string;
+  if (isActionRequired) {
+    body = `This analysis identified ${flagCount} red flag${flagCount === 1 ? "" : "s"} consistent with known precursors to financial misstatement or governance failure. Independent due diligence and review of primary source filings is strongly advised before any investment or credit decision.`;
+  } else if (flagCount > 0) {
+    body = `This analysis identified ${flagCount} red flag${flagCount === 1 ? "" : "s"}. The overall integrity profile remains within an acceptable range, but continued monitoring of these items is recommended.`;
+  } else {
+    body = "No red flags were identified in this analysis. The overall integrity profile is consistent with sound financial reporting and governance practices.";
+  }
+
+  if (confidence === "low") {
+    body += " Confidence in this score is low due to limited available data — treat conclusions as preliminary.";
+  }
+
+  return { variant: isActionRequired ? "action-required" : "standard", body };
+}
 
 export default function ReportPage({ params }: { params: { ticker: string } }) {
-  const ticker = params.ticker || "WDI.DE";
+  const ticker = params.ticker;
+  const { company, analysis, isLoading: companyLoading, error } = useCompanyData(ticker);
+  const { report, isLoading: reportLoading } = useReport(ticker, !!analysis);
+  const { isAdding, add: handleAddToWatchlist } = useAddToWatchlist(ticker);
+
+  const isLoading = companyLoading || (!!analysis && reportLoading);
+
+  if (isLoading) {
+    return (
+      <div className="w-full flex justify-center mt-8 pb-16">
+        <div className="w-full max-w-[760px] flex flex-col">
+          <div className="mb-8">
+            <Skeleton className="w-36 h-3 mb-3" />
+            <Skeleton className="w-64 h-6 mb-2" />
+            <Skeleton className="w-48 h-3 mb-3" />
+            <Skeleton className="w-28 h-5 rounded-[4px]" />
+          </div>
+          <div className="w-full h-px bg-border mb-8" />
+          <div className="flex flex-col gap-3">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <Skeleton key={i} className="w-full h-4" />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="w-full flex justify-center mt-8 pb-16">
+        <div className="w-full max-w-[760px] bg-surface border border-border rounded-card p-10 flex flex-col items-center justify-center text-center">
+          <div className="font-sans text-sm text-risk-high mb-1">Couldn&apos;t load this company.</div>
+          <div className="font-sans text-xs text-text-secondary">{error}</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!analysis) {
+    return (
+      <div className="w-full flex justify-center mt-8 pb-16">
+        <div className="w-full max-w-[760px] bg-surface border border-border rounded-card p-10 flex flex-col items-center text-center">
+          <div className="font-sans text-2xs font-medium uppercase tracking-[0.08em] text-text-secondary mb-3">
+            AI FORENSIC REPORT
+          </div>
+          <h2 className="font-sans text-lg font-semibold text-text-primary mb-2">
+            {company?.name ?? ticker} hasn&apos;t been analyzed yet
+          </h2>
+          <p className="font-sans text-sm text-text-secondary max-w-[420px] mb-6">
+            Run an investigation from the overview tab to generate a full forensic report.
+          </p>
+          <Link href={`/company/${ticker}`} className="font-sans text-sm text-navy font-medium hover:underline">
+            Go to Overview →
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const riskLevel = getRiskLevel(analysis.integrity_score ?? 0);
+  const riskLabel = getRiskLabel(analysis.integrity_score ?? 0);
+  const recommendation = buildRecommendation(analysis);
+
+  const handleExportCsv = () => {
+    const generatedAt = report?.generated_at ?? analysis.run_at;
+    downloadCsv(`${ticker}-forensics.csv`, buildForensicsCsv(ticker, generatedAt, analysis.module_details));
+  };
 
   return (
     <div className="w-full flex justify-center mt-8 pb-16">
       <div className="w-full max-w-[760px] flex flex-col">
-        
+
         {/* PAGE HEADER */}
         <div className="mb-8">
-          <div className="font-sans text-[10px] font-medium uppercase tracking-[0.08em] text-[#7A786F] mb-3">
+          <div className="font-sans text-2xs font-medium uppercase tracking-[0.08em] text-text-secondary mb-3">
             AI FORENSIC REPORT
           </div>
-          <h1 className="font-sans text-[24px] font-semibold text-[#1A1A18] mb-2">Wirecard AG</h1>
-          
+          <h1 className="font-sans text-[24px] font-semibold text-text-primary mb-2">
+            {company?.name ?? ticker}
+          </h1>
+
           <div className="flex items-center gap-2 mb-3">
-            <span className="font-mono text-[12px] text-[#7A786F]">{ticker === "WDI.DE" ? "WDI.DE" : ticker}</span>
-            <span className="text-[#E3DFD8]">·</span>
-            <span className="font-sans text-[12px] text-[#7A786F]">Generated June 9, 2025</span>
-            <span className="text-[#E3DFD8]">·</span>
-            <span className="font-sans text-[12px] text-[#7A786F]">Analysis #2891</span>
+            <span className="font-mono text-[12px] text-text-secondary">{ticker}</span>
+            <span className="text-border">·</span>
+            <span className="font-sans text-[12px] text-text-secondary">
+              Generated {formatDate(report?.generated_at ?? analysis.run_at)}
+            </span>
+            <span className="text-border">·</span>
+            <span className="font-mono text-[12px] text-text-secondary">
+              Analysis #{analysis.id.slice(0, 8).toUpperCase()}
+            </span>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="font-mono text-[13px] font-medium text-[#B03028]">22 / 100</span>
-            <Badge risk="high">HIGH RISK</Badge>
+            <span className="font-mono text-[13px] font-medium" style={{ color: getScoreColor(analysis.integrity_score ?? 0) }}>
+              {formatScore(analysis.integrity_score)} / 100
+            </span>
+            <Badge risk={riskLevel}>{riskLabel}</Badge>
           </div>
         </div>
 
-        <div className="w-full h-[1px] bg-[#E3DFD8] mb-8" />
+        <div className="w-full h-px bg-border mb-8" />
 
-        {/* REPORT BODY SECTIONS */}
-        <div className="flex flex-col gap-10 font-sans text-[15px] text-[#1A1A18] leading-[1.8]">
-          
-          <section>
-            <div className="font-sans text-[10px] font-medium uppercase tracking-[0.08em] text-[#7A786F] mb-1">
-              EXECUTIVE SUMMARY
-            </div>
-            <h2 className="font-sans text-[16px] font-semibold text-[#1A1A18] mb-3">
-              Executive Summary
-            </h2>
-            <p>
-              Wirecard AG presents a Corporate Integrity Score of 22 out of 100, placing it in the High Risk category. The investigation identified critical divergences between reported financial performance and underlying cash generation, alongside three significant governance events within a 24-month window.
-            </p>
-          </section>
+        {/* REPORT BODY */}
+        {report?.content ? (
+          <ReportSection content={report.content} />
+        ) : (
+          <div className="bg-surface border border-border rounded-card p-6 flex items-center gap-3">
+            <div className="w-2 h-2 rounded-full bg-risk-strong shrink-0" />
+            <span className="font-sans text-[13px] text-text-primary">
+              Report content is not yet available for this analysis.
+            </span>
+          </div>
+        )}
 
-          <section>
-            <div className="font-sans text-[10px] font-medium uppercase tracking-[0.08em] text-[#7A786F] mb-1">
-              KEY CONCERNS
-            </div>
-            <h2 className="font-sans text-[16px] font-semibold text-[#1A1A18] mb-3">
-              Key Concerns
-            </h2>
-            <ul className="flex flex-col gap-2 font-sans text-[14px] text-[#1A1A18] leading-[1.75]">
-              <li className="flex"><span className="text-[#B0ADA7] mr-2">—</span><span>Operating cash flow declined for four consecutive quarters while net income was reported as positive.</span></li>
-              <li className="flex"><span className="text-[#B0ADA7] mr-2">—</span><span>CFO resigned in Q2 2022 with no successor named for 90 days.</span></li>
-              <li className="flex"><span className="text-[#B0ADA7] mr-2">—</span><span>Auditor replaced in Q3 2022, two quarters after a qualified opinion.</span></li>
-              <li className="flex"><span className="text-[#B0ADA7] mr-2">—</span><span>Revenue-to-receivables ratio expanded <span className="font-mono text-[13px]">2.8×</span> in 18 months.</span></li>
-              <li className="flex"><span className="text-[#B0ADA7] mr-2">—</span><span>Management guidance revised downward twice in the same fiscal year.</span></li>
-              <li className="flex"><span className="text-[#B0ADA7] mr-2">—</span><span>SEC initiated an informal inquiry in November 2023.</span></li>
-            </ul>
-          </section>
-
-          <section>
-            <div className="font-sans text-[10px] font-medium uppercase tracking-[0.08em] text-[#7A786F] mb-1">
-              FINANCIAL ANALYSIS
-            </div>
-            <h2 className="font-sans text-[16px] font-semibold text-[#1A1A18] mb-3">
-              Financial Analysis
-            </h2>
-            <p>
-              Net income of <span className="font-mono text-[14px]">€415M</span> in FY2022 was accompanied by operating cash outflow of <span className="font-mono text-[14px]">€112M</span> — a divergence of <span className="font-mono text-[14px]">€527M</span> that is inconsistent with the reported margin profile. This represents the widest gap between accrual earnings and cash realization in the company's public history.
-            </p>
-          </section>
-
-          <section>
-            <div className="font-sans text-[10px] font-medium uppercase tracking-[0.08em] text-[#7A786F] mb-1">
-              GOVERNANCE OBSERVATIONS
-            </div>
-            <h2 className="font-sans text-[16px] font-semibold text-[#1A1A18] mb-3">
-              Governance Observations
-            </h2>
-            <p>
-              The departure of the CFO in April 2022 was followed by a change in auditors in September 2022. This sequencing of executive turnover followed by audit rotation is historically correlated with elevated financial restatement probability.
-            </p>
-          </section>
-
-          <section>
-            <div className="font-sans text-[10px] font-medium uppercase tracking-[0.08em] text-[#7A786F] mb-1">
-              NARRATIVE REVIEW
-            </div>
-            <h2 className="font-sans text-[16px] font-semibold text-[#1A1A18] mb-3">
-              Narrative Review
-            </h2>
-            <p className="mb-6">
-              Linguistic analysis of management commentary reveals significant deterioration in forward-looking sentiment.
-            </p>
-            
-            <div className="flex flex-col gap-6 pl-4 border-l-2 border-[#E3DFD8]">
-              <div>
-                <div className="font-mono text-[11px] text-[#7A786F] mb-1">Q2 2022</div>
-                <p className="italic font-sans text-[14px] text-[#1A1A18]">"We reaffirm full-year revenue guidance of €5.4B with high confidence."</p>
-              </div>
-              <div>
-                <div className="font-mono text-[11px] text-[#7A786F] mb-1">Q4 2022</div>
-                <p className="italic font-sans text-[14px] text-[#1A1A18]">"Given evolving market conditions, we are withdrawing forward guidance for FY2023."</p>
-              </div>
-            </div>
-          </section>
-
-        </div>
-
-        <div className="w-full h-[1px] bg-[#E3DFD8] my-10" />
+        <div className="w-full h-px bg-border my-10" />
 
         {/* RECOMMENDATION BOX */}
         <div className="mb-10">
-          <RecommendationBox
-            variant="action-required"
-            body="Patterns detected in this analysis are consistent with known precursors to material financial misstatement. Independent due diligence and review of primary source filings is strongly advised before any investment or credit decision."
-          />
+          <RecommendationBox variant={recommendation.variant} body={recommendation.body} />
         </div>
 
         {/* DISCLAIMER */}
         <div className="mb-12">
-          <p className="font-sans text-[11px] text-[#B0ADA7] italic text-center leading-relaxed">
+          <p className="font-sans text-[11px] text-text-muted italic text-center leading-relaxed">
             This report is generated from publicly available information using AI-assisted forensic analysis. It does not constitute financial advice, legal opinion, or a finding of fraud. All conclusions are probabilistic and subject to the limitations of available data.
           </p>
         </div>
 
         {/* PAGE ACTIONS */}
-        <div className="flex justify-end items-center gap-4">
-          <button className="font-sans text-[13px] text-[#1C3558] hover:underline px-4">
-            Share Report
+        <div className="flex justify-end items-center gap-4 print-hidden">
+          <button
+            onClick={handleAddToWatchlist}
+            disabled={isAdding}
+            className="font-sans text-[13px] text-navy hover:underline px-4 disabled:opacity-50 disabled:no-underline disabled:cursor-not-allowed"
+          >
+            {isAdding ? "Adding..." : "Add to Watchlist"}
           </button>
-          <Button variant="secondary">
-            Export PDF
-          </Button>
+          <Button variant="secondary" onClick={handleExportCsv}>Export Data (CSV)</Button>
+          <Button variant="secondary" onClick={() => window.print()}>Export PDF</Button>
         </div>
 
       </div>
