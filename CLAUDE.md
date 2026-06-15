@@ -61,6 +61,20 @@ Amendments are explicit and dated — never silent behavioral changes inside a f
 > `"failed"`, stops polling, and sets `error = "Analysis was interrupted. Please retry."` —
 > the existing `analysisError ||` gates in `layout.tsx`'s status bar and `page.tsx`'s
 > empty state render this with no further changes.
+>
+> **Step 4 — structured JSON logging + correlation ID.** `backend/app/logging_config.py`
+> adds `JsonFormatter` (renders every log record as one JSON line: `timestamp`, `level`,
+> `logger`, `message`, plus any `extra=` fields) and `CorrelationLoggerAdapter` (merges
+> per-call `extra` with the adapter's bound context, unlike stdlib `LoggerAdapter` which
+> overwrites it). `main.py` calls `configure_logging()` at import time, so every module's
+> logger inherits the JSON formatter via root-logger propagation. In
+> `run_full_analysis`, `log = CorrelationLoggerAdapter(logger, {"correlation_id":
+> str(analysis_id), "ticker": company.ticker})` is built once and stored on
+> `StageContext.log`; the orchestrator emits `log.info("stage started", extra={"stage":
+> stage.name})` before each of the 7 stages and `log.info("analysis complete")` at the
+> end, and every `_stage_*` failure log (`ctx.log.error(...)`) carries the same
+> `correlation_id`/`ticker` plus its own `stage`. This lets a stuck analysis (Step 3's
+> reaper target) be traced to its last-logged stage across Render's log stream.
 
 ---
 

@@ -11,7 +11,10 @@ from app.api.health import router as health_router
 from app.api.v1.router import api_router
 from app.config import settings
 from app.database import engine
+from app.logging_config import configure_logging
 from app.tasks.reaper import reaper_loop
+
+configure_logging()
 
 logger = logging.getLogger(__name__)
 

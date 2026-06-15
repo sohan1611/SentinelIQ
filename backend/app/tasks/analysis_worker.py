@@ -21,6 +21,7 @@ from app.core.governance.governance_scorer import GovernanceScorer
 from app.core.narrative.consistency_engine import ConsistencyEngine
 from app.core.scoring.fraud_scorer import FraudScorer
 from app.core.ai.report_generator import ReportGenerator
+from app.logging_config import CorrelationLoggerAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,7 @@ class StageContext:
     analysis: AnalysisResult
     analysis_id: UUID
     company_id: UUID
+    log: logging.LoggerAdapter
     scores: dict = field(default_factory=dict)
     forensics_details: dict = field(default_factory=dict)
     financial_records: list = field(default_factory=list)
@@ -66,7 +68,7 @@ async def _stage_financials(ctx: StageContext):
             ctx.financial_records.append(fd)
         await ctx.session.commit()
     except Exception as e:
-        logger.error(f"Stage financials failed for {ctx.company.ticker}: {e}")
+        ctx.log.error(f"Stage financials failed: {e}", extra={"stage": "financials"})
         await ctx.session.rollback()
 
 
@@ -105,7 +107,7 @@ async def _stage_forensics(ctx: StageContext):
             ctx.all_flags.append(flag_rec)
         await ctx.session.commit()
     except Exception as e:
-        logger.error(f"Stage forensics failed for {ctx.company.ticker}: {e}")
+        ctx.log.error(f"Stage forensics failed: {e}", extra={"stage": "forensics"})
         await ctx.session.rollback()
         ctx.scores["financial"] = None
         ctx.scores["cashflow"] = None
@@ -129,7 +131,7 @@ async def _stage_governance(ctx: StageContext):
             ctx.all_flags.append(flag_rec)
         await ctx.session.commit()
     except Exception as e:
-        logger.error(f"Stage governance failed for {ctx.company.ticker}: {e}")
+        ctx.log.error(f"Stage governance failed: {e}", extra={"stage": "governance"})
         await ctx.session.rollback()
         ctx.scores["governance"] = None
 
@@ -160,7 +162,7 @@ async def _stage_narrative(ctx: StageContext):
 
         await ctx.session.commit()
     except Exception as e:
-        logger.error(f"Stage narrative failed for {ctx.company.ticker}: {e}")
+        ctx.log.error(f"Stage narrative failed: {e}", extra={"stage": "narrative"})
         await ctx.session.rollback()
         ctx.scores["narrative"] = 50.0
 
@@ -169,7 +171,7 @@ async def _stage_news(ctx: StageContext):
     try:
         ctx.scores["news"] = await fetch_news_sentiment(ctx.company.name, ctx.company.ticker)
     except Exception as e:
-        logger.error(f"Stage news failed for {ctx.company.ticker}: {e}")
+        ctx.log.error(f"Stage news failed: {e}", extra={"stage": "news"})
         ctx.scores["news"] = 50.0
 
 
@@ -205,7 +207,7 @@ async def _stage_score_persist(ctx: StageContext):
         }
         await ctx.session.commit()
     except Exception as e:
-        logger.error(f"Stage score_persist failed for {ctx.company.ticker}: {e}")
+        ctx.log.error(f"Stage score_persist failed: {e}", extra={"stage": "score_persist"})
         await ctx.session.rollback()
 
 
@@ -215,7 +217,7 @@ async def _stage_report(ctx: StageContext):
             ctx.company, ctx.analysis, ctx.all_flags, ctx.narrative_snapshots
         )
     except Exception as e:
-        logger.error(f"Stage report failed for {ctx.company.ticker}: {e}")
+        ctx.log.error(f"Stage report failed: {e}", extra={"stage": "report"})
         report_content = "Report generation failed. Raw scores are available above."
 
     rep = Report(
@@ -243,8 +245,13 @@ async def run_full_analysis(company_id: UUID, analysis_id: UUID):
         company = await session.get(Company, company_id)
         analysis = await session.get(AnalysisResult, analysis_id)
         if not company or not analysis:
-            logger.error(f"Analysis {analysis_id}: Company or Analysis missing")
+            logger.error(
+                f"Analysis {analysis_id}: Company or Analysis missing",
+                extra={"correlation_id": str(analysis_id)},
+            )
             return
+
+        log = CorrelationLoggerAdapter(logger, {"correlation_id": str(analysis_id), "ticker": company.ticker})
 
         ctx = StageContext(
             session=session,
@@ -252,14 +259,16 @@ async def run_full_analysis(company_id: UUID, analysis_id: UUID):
             analysis=analysis,
             analysis_id=analysis_id,
             company_id=company_id,
+            log=log,
         )
 
         for stage in STAGES:
             await update_status(session, analysis_id, stage.status_text)
+            log.info("stage started", extra={"stage": stage.name})
             try:
                 await stage.fn(ctx)
             except Exception as e:
-                logger.error(f"Unhandled exception in stage '{stage.name}' for {company.ticker}: {e}")
+                log.error(f"Unhandled exception in stage '{stage.name}': {e}", extra={"stage": stage.name})
                 try:
                     await session.rollback()
                 except Exception:
@@ -268,3 +277,4 @@ async def run_full_analysis(company_id: UUID, analysis_id: UUID):
         analysis.status = "complete"
         company.last_analyzed = datetime.utcnow()
         await session.commit()
+        log.info("analysis complete")

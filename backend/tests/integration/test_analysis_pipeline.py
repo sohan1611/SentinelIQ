@@ -10,6 +10,7 @@ module_details -> AnalysisResult wiring holds together end to end
 (ADR-010 / ADR-011).
 """
 
+import logging
 import uuid
 from unittest.mock import AsyncMock
 
@@ -249,3 +250,29 @@ async def test_governance_stage_failure_does_not_abort_pipeline(monkeypatch, com
     reports = [o for o in fake_session.added if isinstance(o, Report)]
     assert len(reports) == 1
     assert reports[0].content == "# Report\nDegraded."
+
+
+async def test_run_full_analysis_logs_carry_correlation_id(monkeypatch, company, analysis, caplog):
+    # Phase 10 Step 4: every per-stage log line for one run_full_analysis
+    # invocation must carry the same correlation_id (analysis.id) and ticker,
+    # so a stuck/killed run can be traced to its last completed stage.
+    monkeypatch.setattr(analysis_worker, "fetch_financials", AsyncMock(return_value=FINANCIALS))
+    monkeypatch.setattr(analysis_worker, "fetch_news_text", AsyncMock(return_value="Acme reports record quarter."))
+    monkeypatch.setattr(analysis_worker, "fetch_news_sentiment", AsyncMock(return_value=65.0))
+    monkeypatch.setattr(analysis_worker, "fetch_news_statements", AsyncMock(return_value=NARRATIVE_STATEMENTS))
+    monkeypatch.setattr(analysis_worker, "GovernanceScorer", lambda: FakeGovernanceScorer(GOV_RESULT))
+    monkeypatch.setattr(analysis_worker, "ConsistencyEngine", lambda: FakeConsistencyEngine(NARRATIVE_RESULT))
+    monkeypatch.setattr(analysis_worker, "ReportGenerator", lambda: FakeReportGenerator("# Report\nAll good."))
+
+    with caplog.at_level(logging.INFO, logger="app.tasks.analysis_worker"):
+        await analysis_worker.run_full_analysis(company.id, analysis.id)
+
+    stage_started = [r for r in caplog.records if r.getMessage() == "stage started"]
+    assert {r.stage for r in stage_started} == {s.name for s in analysis_worker.STAGES}
+    assert all(r.correlation_id == str(analysis.id) for r in stage_started)
+    assert all(r.ticker == "ACME" for r in stage_started)
+
+    complete = [r for r in caplog.records if r.getMessage() == "analysis complete"]
+    assert len(complete) == 1
+    assert complete[0].correlation_id == str(analysis.id)
+    assert complete[0].ticker == "ACME"
