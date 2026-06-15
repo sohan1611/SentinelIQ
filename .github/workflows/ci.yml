@@ -1,0 +1,42 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/ci.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/ci.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      # Required by app/config.py at import time. Tests mock all DB/Gemini
+      # access (see tests/integration/test_analysis_pipeline.py), so these
+      # placeholders only need to satisfy pydantic-settings validation.
+      DATABASE_URL: postgresql+asyncpg://user:password@localhost/sentineliq
+      GEMINI_API_KEY: ci-placeholder-key
+      SECRET_KEY: ci-placeholder-secret-key-not-for-production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        run: pytest
