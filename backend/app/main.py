@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 
+from app.api.health import router as health_router
 from app.api.v1.router import api_router
 from app.config import settings
 from app.database import engine
@@ -62,4 +63,5 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     logger.exception("Unhandled exception")
     return JSONResponse(status_code=500, content={"error": {"code": "INTERNAL_ERROR", "message": "An unexpected error occurred."}})
 
+app.include_router(health_router)
 app.include_router(api_router, prefix="/api/v1")

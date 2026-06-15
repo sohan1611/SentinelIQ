@@ -536,7 +536,13 @@ Gemini failures fall back to a neutral score — never crash.**
 
 ## API Routes Reference
 
+All routes below are mounted under `/api/v1` except `/health`, which is
+unauthenticated and unversioned (Render hits it directly to detect
+free-tier spin-down/restart cycles — ADR-012).
+
 ```
+GET    /health                      DB connectivity probe, no auth
+
 POST   /auth/register              create user, return JWT
 POST   /auth/login                 OAuth2 form, return JWT
 GET    /auth/me                    current user profile
