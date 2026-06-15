@@ -54,13 +54,13 @@ export default function NarrativePage({ params }: { params: { ticker: string } }
     return (
       <div className="w-full bg-[#FFFFFF] border border-[#E3DFD8] rounded-[8px] p-10 flex flex-col items-center text-center mt-8">
         <div className="font-sans text-[10px] font-medium uppercase tracking-[0.08em] text-[#7A786F] mb-3">
-          NARRATIVE CONSISTENCY
+          NEWS TONE (EXPERIMENTAL)
         </div>
         <h2 className="font-sans text-[18px] font-semibold text-[#1A1A18] mb-2">
           {company?.name ?? ticker} hasn&apos;t been analyzed yet
         </h2>
         <p className="font-sans text-[13px] text-[#7A786F] max-w-[420px] mb-6">
-          Run an investigation from the overview tab to evaluate narrative consistency across recent management commentary.
+          Run an investigation from the overview tab to evaluate sentiment tone across recent news coverage.
         </p>
         <Link href={`/company/${ticker}`} className="font-sans text-[13px] text-[#1C3558] font-medium hover:underline">
           Go to Overview →
@@ -70,23 +70,23 @@ export default function NarrativePage({ params }: { params: { ticker: string } }
   }
 
   const snapshots = analysis.module_details?.narrative?.snapshots ?? [];
-  const narrativeFlags = analysis.red_flags.filter((f) => f.flag_type === "narrative");
+  const toneShifts = analysis.module_details?.narrative?.tone_shifts ?? [];
 
   let summary: string;
   if (snapshots.length === 0) {
-    summary = "Not enough recent management commentary was available to assess narrative consistency.";
+    summary = "Not enough recent news coverage was available to assess tone consistency.";
   } else if (snapshots.length === 1) {
-    summary = "Only one recent management statement was available — not enough to compare tone across periods.";
-  } else if (narrativeFlags.length > 0) {
-    summary = `${narrativeFlags.length} tone shift${narrativeFlags.length === 1 ? "" : "s"} detected across ${snapshots.length} recent statements.`;
+    summary = "Only one recent news item was available — not enough to compare tone across periods.";
+  } else if (toneShifts.length > 0) {
+    summary = `${toneShifts.length} tone shift${toneShifts.length === 1 ? "" : "s"} detected across ${snapshots.length} recent headlines.`;
   } else {
-    summary = `Tone is consistent across ${snapshots.length} recent statements — no significant contradictions detected.`;
+    summary = `Tone is consistent across ${snapshots.length} recent headlines — no significant shifts detected.`;
   }
 
   const pairs = snapshots.slice(0, -1).map((prev, i) => {
     const curr = snapshots[i + 1];
-    const flag = narrativeFlags.find((f) => f.period === curr.period);
-    return { prev, curr, flag };
+    const shift = toneShifts.find((t) => t.period === curr.period);
+    return { prev, curr, shift };
   });
 
   return (
@@ -96,7 +96,7 @@ export default function NarrativePage({ params }: { params: { ticker: string } }
       <section>
         <div className="flex items-center gap-3 mb-3">
           <h2 className="font-sans text-[10px] font-medium uppercase tracking-[0.08em] text-[#7A786F]">
-            NARRATIVE CONSISTENCY
+            NEWS TONE (EXPERIMENTAL)
           </h2>
           <ModuleScoreBadge score={analysis.narrative_score} />
         </div>
@@ -104,7 +104,7 @@ export default function NarrativePage({ params }: { params: { ticker: string } }
           {summary}
         </p>
         <p className="font-sans text-[12px] text-[#B0ADA7]">
-          Narrative consistency is shown for reference and does not currently affect the Corporate Integrity Score.
+          News Tone is derived from recent headlines, shown for reference, and does not affect the Corporate Integrity Score.
         </p>
       </section>
 
@@ -113,13 +113,13 @@ export default function NarrativePage({ params }: { params: { ticker: string } }
         <div className="bg-[#FFFFFF] border border-[#E3DFD8] rounded-[8px] p-6 flex items-center gap-3">
           <div className="w-2 h-2 rounded-full bg-risk-strong shrink-0" />
           <span className="font-sans text-[13px] text-[#1A1A18]">
-            No recent management statements were found for this company.
+            No recent news coverage was found for this company.
           </span>
         </div>
       ) : snapshots.length === 1 ? (
         <section>
           <div className="text-[11px] font-sans font-medium uppercase text-text-secondary mb-4 tracking-[0.04em]">
-            Management Statement
+            News Headline
           </div>
           <div className="border-t border-b border-border p-4 bg-surface flex flex-col items-start">
             <div className="font-mono text-[11px] text-text-secondary mb-3">{snapshots[0].period}</div>
@@ -133,7 +133,7 @@ export default function NarrativePage({ params }: { params: { ticker: string } }
         </section>
       ) : (
         <section className="flex flex-col gap-10">
-          {pairs.map(({ prev, curr, flag }, idx) => (
+          {pairs.map(({ prev, curr, shift }, idx) => (
             <NarrativeComparison
               key={idx}
               left={{
@@ -146,8 +146,8 @@ export default function NarrativePage({ params }: { params: { ticker: string } }
                 quote: curr.statement_text,
                 sentiment: toSentiment(curr.sentiment_label),
               }}
-              contradictionAlert={flag?.description}
-              alertSeverity={flag ? (flag.severity === "high" ? "severe" : "moderate") : undefined}
+              contradictionAlert={shift?.description}
+              alertSeverity={shift ? (shift.severity === "high" ? "severe" : "moderate") : undefined}
             />
           ))}
         </section>

@@ -64,10 +64,13 @@ export default function GovernancePage({ params }: { params: { ticker: string } 
   }
 
   const governanceFlags = analysis.red_flags.filter((f) => f.flag_type === "governance");
+  const lowConfidence = analysis.module_details?.governance?.low_confidence ?? false;
 
   let summary: string;
   if (analysis.governance_score === null || analysis.governance_score === undefined) {
     summary = "Governance signal unavailable for this analysis — the evaluation could not be completed.";
+  } else if (lowConfidence) {
+    summary = "Limited recent news coverage was available for this company — governance could not be meaningfully assessed.";
   } else if (governanceFlags.length > 0) {
     summary = `${governanceFlags.length} governance red flag${governanceFlags.length === 1 ? "" : "s"} identified from recent coverage.`;
   } else {
@@ -85,9 +88,14 @@ export default function GovernancePage({ params }: { params: { ticker: string } 
           </h2>
           <ModuleScoreBadge score={analysis.governance_score} />
         </div>
-        <p className="font-sans text-[14px] text-[#1A1A18] leading-[1.65]">
+        <p className="font-sans text-[14px] text-[#1A1A18] leading-[1.65] mb-2">
           {summary}
         </p>
+        {lowConfidence && (
+          <p className="font-sans text-[12px] text-[#B0ADA7]">
+            This score reflects a neutral baseline due to limited recent news coverage, not a completed governance review.
+          </p>
+        )}
       </section>
 
       {/* GOVERNANCE EVENTS CHECKLIST */}

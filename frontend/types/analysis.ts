@@ -47,6 +47,19 @@ export interface NarrativeSnapshotData {
   source: string;
 }
 
+export interface ToneShift {
+  period: string;
+  severity: string;
+  description: string;
+}
+
+export interface GovernanceProvenance {
+  model_id: string | null;
+  prompt: string | null;
+  raw_response: string | null;
+  low_confidence: boolean;
+}
+
 export interface ModuleScores {
   financial?: number;
   cashflow?: number;
@@ -76,6 +89,11 @@ export interface ModuleDetails {
   };
   narrative?: {
     snapshots?: NarrativeSnapshotData[];
+    tone_shifts?: ToneShift[];
+  };
+  governance?: {
+    provenance?: GovernanceProvenance;
+    low_confidence?: boolean;
   };
 }
 

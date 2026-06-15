@@ -24,7 +24,7 @@ export function NarrativeComparison({ left, right, contradictionAlert, alertSeve
   return (
     <div className="w-full">
       <div className="text-[11px] font-sans font-medium uppercase text-text-secondary mb-4 tracking-[0.04em]">
-        Management Statement Comparison
+        News Headline Comparison
       </div>
       
       <div className="flex flex-col md:flex-row border-t border-b border-border divide-y md:divide-y-0 md:divide-x divide-border">

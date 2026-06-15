@@ -9,7 +9,7 @@ import { getScoreColor as getScoreHexColor } from "@/lib/utils/scoreColor";
 
 interface ModuleScoreCardProps {
   label: string;
-  score: number;
+  score: number | null;
   summary: string;
   href?: string;
   loading?: boolean;
@@ -21,6 +21,8 @@ function getScoreColor(score: number) {
   if (score <= 80) return { border: "border-l-navy", text: "text-navy" };
   return { border: "border-l-risk-strong", text: "text-risk-strong" };
 }
+
+const UNAVAILABLE_COLORS = { border: "border-l-border", text: "text-text-muted" };
 
 export function ModuleScoreCard({ label, score, summary, href = "#", loading }: ModuleScoreCardProps) {
   if (loading) {
@@ -35,7 +37,8 @@ export function ModuleScoreCard({ label, score, summary, href = "#", loading }: 
     );
   }
 
-  const colors = getScoreColor(score);
+  const hasScore = score !== null && score !== undefined;
+  const colors = hasScore ? getScoreColor(score) : UNAVAILABLE_COLORS;
 
   return (
     <Card className={`w-full md:w-[260px] h-auto md:h-[160px] flex flex-col justify-between border-l-[3px] ${colors.border}`}>
@@ -45,11 +48,13 @@ export function ModuleScoreCard({ label, score, summary, href = "#", loading }: 
         </div>
         <div className="flex items-baseline mb-2">
           <span className={`font-mono text-[32px] md:text-[40px] font-bold leading-none ${colors.text}`}>
-            {score}
+            {formatScore(score)}
           </span>
-          <span className="font-mono text-[16px] text-text-secondary ml-1">
-            /100
-          </span>
+          {hasScore && (
+            <span className="font-mono text-[16px] text-text-secondary ml-1">
+              /100
+            </span>
+          )}
         </div>
         <div className="w-full h-[1px] bg-border mb-3" />
         <p className="font-sans text-[13px] text-text-primary leading-[1.6] md:leading-tight line-clamp-3 md:line-clamp-2 mb-auto">

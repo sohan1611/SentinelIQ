@@ -46,6 +46,7 @@ class StageContext:
     narrative_snapshots: list = field(default_factory=list)
     narrative_snapshot_data: list = field(default_factory=list)
     narrative_provenance: list = field(default_factory=list)
+    narrative_tone_shifts: list = field(default_factory=list)
     governance_provenance: dict = field(default_factory=dict)
 
 
@@ -152,14 +153,10 @@ async def _stage_narrative(ctx: StageContext):
             ctx.session.add(sn)
             ctx.narrative_snapshots.append(sn)
 
-        for cf in cont_flags:
-            flag_rec = RedFlag(
-                analysis_id=ctx.analysis_id,
-                company_id=ctx.company_id,
-                **cf,
-            )
-            ctx.session.add(flag_rec)
-            ctx.all_flags.append(flag_rec)
+        ctx.narrative_tone_shifts = [
+            {"period": cf["period"], "severity": cf["severity"], "description": cf["description"]}
+            for cf in cont_flags
+        ]
 
         await ctx.session.commit()
     except Exception as e:
@@ -199,8 +196,12 @@ async def _stage_score_persist(ctx: StageContext):
                 "snapshots": ctx.narrative_snapshot_data,
                 "statements_used": len(ctx.narrative_snapshot_data),
                 "provenance": ctx.narrative_provenance,
+                "tone_shifts": ctx.narrative_tone_shifts,
             },
-            "governance": {"provenance": ctx.governance_provenance},
+            "governance": {
+                "provenance": ctx.governance_provenance,
+                "low_confidence": ctx.governance_provenance.get("low_confidence", False),
+            },
         }
         await ctx.session.commit()
     except Exception as e:

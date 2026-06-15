@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { IntegrityScoreGauge } from "@/components/charts/IntegrityGauge";
 import { Button } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
+import { Tooltip } from "@/components/ui/Tooltip";
 import { ModuleScoreCard } from "@/components/modules/ScoreCard";
 import { RedFlagTimeline } from "@/components/charts/RedFlagTimeline";
 import { RedFlagItem } from "@/components/modules/RedFlagItem";
@@ -29,7 +31,7 @@ const COMPONENT_SCORES: { key: ScoreKey; label: string }[] = [
   { key: "cashflow_score", label: "Cash Flow Integrity" },
   { key: "governance_score", label: "Governance Risk" },
   { key: "earnings_score", label: "Earnings Quality" },
-  { key: "narrative_score", label: "Narrative Consistency" },
+  { key: "narrative_score", label: "News Tone (experimental)" },
   { key: "news_score", label: "News Sentiment" },
 ];
 
@@ -54,11 +56,17 @@ const MODULE_CARDS: { key: ScoreKey; label: string; summary: string; tab: string
   },
   {
     key: "narrative_score",
-    label: "Narrative Consistency",
-    summary: "Tone and consistency of management commentary across reporting periods.",
+    label: "News Tone (experimental)",
+    summary: "Sentiment across recent news headlines — experimental, zero-weighted.",
     tab: "narrative",
   },
 ];
+
+const CONFIDENCE_TOOLTIPS: Record<"low" | "medium" | "high", string> = {
+  high: "5 of 5 modules scored, 3+ years of history",
+  medium: "Most modules scored from available data",
+  low: "2 or fewer modules produced real signal",
+};
 
 export default function CompanyOverviewPage({ params }: { params: { ticker: string } }) {
   const ticker = params.ticker;
@@ -80,6 +88,8 @@ export default function CompanyOverviewPage({ params }: { params: { ticker: stri
         analysis.module_details?.debt?.debt_metrics?.length ?? 0
       )
     : 0;
+
+  const confidence = analysis?.module_details?.confidence;
 
   return (
     <div className="flex flex-col md:flex-row gap-8 mt-6 relative">
@@ -162,12 +172,17 @@ export default function CompanyOverviewPage({ params }: { params: { ticker: stri
               <div className="font-sans text-[10px] font-medium uppercase tracking-[0.08em] text-[#7A786F] mb-6 text-center">
                 CORPORATE INTEGRITY SCORE
               </div>
-              <div className="mb-8">
+              <div className="mb-8 flex flex-col items-center gap-3">
                 <IntegrityScoreGauge
                   score={analysis.integrity_score ?? 0}
                   lastAnalyzed={formatDate(company?.last_analyzed ?? analysis.run_at)}
                   startAnimation={isLoaded}
                 />
+                {confidence && (
+                  <Tooltip content={CONFIDENCE_TOOLTIPS[confidence]} side="bottom">
+                    <Badge risk="analyzing">Confidence: {confidence.toUpperCase()}</Badge>
+                  </Tooltip>
+                )}
               </div>
 
               <div className="w-full h-[1px] bg-[#E3DFD8] mb-6" />
@@ -178,8 +193,9 @@ export default function CompanyOverviewPage({ params }: { params: { ticker: stri
 
               <div className="flex flex-col gap-4 mb-2">
                 {COMPONENT_SCORES.map(({ key, label }) => {
-                  const score = analysis[key] ?? 0;
-                  const color = getScoreColor(score);
+                  const score = analysis[key];
+                  const hasScore = score !== null && score !== undefined;
+                  const color = hasScore ? getScoreColor(score) : "#B0ADA7";
                   return (
                     <div key={key} className="flex flex-col gap-1">
                       <div className="flex justify-between items-center">
@@ -189,7 +205,9 @@ export default function CompanyOverviewPage({ params }: { params: { ticker: stri
                         </span>
                       </div>
                       <div className="w-full h-[6px] bg-[#E3DFD8] rounded-full overflow-hidden">
-                        <div className="h-full rounded-full" style={{ width: `${score}%`, backgroundColor: color }} />
+                        {hasScore && (
+                          <div className="h-full rounded-full" style={{ width: `${score}%`, backgroundColor: color }} />
+                        )}
                       </div>
                     </div>
                   );
@@ -229,7 +247,7 @@ export default function CompanyOverviewPage({ params }: { params: { ticker: stri
                 <div key={m.key} style={moduleStyles[i]}>
                   <ModuleScoreCard
                     label={m.label}
-                    score={analysis[m.key] ?? 0}
+                    score={analysis[m.key]}
                     summary={m.summary}
                     href={`/company/${ticker}/${m.tab}`}
                   />

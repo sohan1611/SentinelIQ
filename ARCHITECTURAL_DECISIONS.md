@@ -383,6 +383,117 @@ When uptime/scale requirements or a paying customer justify leaving the free tie
 
 ---
 
+# ADR-013 — Cache-Hit Quota: Re-Opens Don't Consume Free-Tier Quota (Amends ADR-007)
+
+**Status:** Accepted (implementation scheduled: Phase 10) · 2026-06-15
+
+### Context
+ADR-007 established `AnalysisRun` as the user-scoped metering log for the free tier's
+"5 analyses/month" gate, and ruled: *"On a cache hit (a fresh `AnalysisResult` exists
+within TTL), still log an `AnalysisRun` so the user is metered without recomputation."*
+As written, that means **re-opening a company you already analyzed this month — with no
+new computation performed — burns one of your 5 monthly slots**, identically to a fresh
+analysis. Escalated to the owner during the Phase 9 review; **Ruling A** resolves it.
+
+### Alternatives Considered
+- **Leave ADR-007 as written (cache hits count toward quota).** *Rejected:* conflates
+  "viewing a result you already paid a slot for" with "requesting new work." A free user
+  could exhaust their entire monthly quota by re-checking 5 companies' dashboards, without
+  ever triggering a new computation — a poor and confusing product experience for no
+  resource-protection benefit (a cache hit costs nothing to serve).
+- **Stop logging `AnalysisRun` on cache hits entirely.** *Rejected:* discards the audit
+  trail ADR-007 was built to provide. "Who looked at what, and when" remains valuable for
+  usage analytics and the enterprise audit story (ADR-007's stated future direction),
+  independent of whether the look-up counts against quota.
+
+### Final Decision
+**Keep logging `AnalysisRun` on every request — cache hit or fresh compute — preserving
+ADR-007's audit trail. Add a boolean column (e.g. `counted`) marking whether a row
+represents a fresh computation.** The free-tier quota query
+(`_free_tier_usage_query`, `backend/app/api/v1/routes/analysis.py`) filters to
+`counted = true` rows only. **Only a fresh computation decrements the 5/month limit; a
+cached re-open is free.**
+
+This is a narrow amendment to ADR-007's final decision — the ownership model
+(`AnalysisRun` as a user-scoped log, separate from the company-scoped `AnalysisResult`)
+is unchanged. Only the *quota-counting predicate* changes, from "every row" to "every row
+where `counted = true`."
+
+### Implications
+- **Database:** small Alembic migration adding `counted: bool` (default `true`) to
+  `AnalysisRun`. Phase 10.
+- **Backend:** `POST /analysis/run` sets `counted = (not cache_hit)` when writing the
+  row; `_free_tier_usage_query` adds `WHERE counted = true`. Phase 10.
+- **Frontend:** quota/limit messaging becomes accurate — re-opening a previously analyzed
+  company never surprises a free user by consuming a slot.
+- **Future:** unaffected — `AnalysisRun` remains ADR-007's audit-log foundation for
+  per-seat billing and enterprise usage analytics; `counted` is one additional dimension
+  on it.
+
+### Future Reconsideration
+If a future incremental-analysis architecture allows *partial* recomputation (e.g., only
+the news/governance modules refresh while financials stay cached), revisit what
+`counted` means at that finer grain — a partial refresh may warrant its own rule rather
+than a binary cache-hit/fresh-compute split.
+
+---
+
+# ADR-014 — Persistent Legal Disclaimer Wording (Ruling B)
+
+**Status:** Accepted · 2026-06-15 (implemented Phase 9, Step 6)
+
+### Context
+OPUS review Decision #5 (Legal) identified a User-Ready blocker: SentinelIQ publishes
+algorithmic fraud-risk judgments — module scores, red flags, and risk labels like "SEVERE
+RISK" — about **real, named public companies**, with **zero disclaimer** on the
+Overview/Financials/Governance/Narrative tabs. A hallucinated governance "red flag" (e.g.,
+an AI-extracted "auditor resigned amid investigation" that didn't happen) rendered as a
+finding is a **defamation / securities-commentary exposure**, not merely a bug. Verified:
+the Report tab already carried a disclaimer, but it is scoped to the AI-generated report
+*text* ("does not constitute financial advice, legal opinion, or a finding of fraud") —
+it does not cover the score gauge, red-flag list, or risk classification shown elsewhere.
+
+### Alternatives Considered
+- **Rely on the existing Report-tab disclaimer alone.** *Rejected:* the score gauge, red
+  flags, and risk labels — the most judgment-like surfaces in the product — appear on the
+  other 4 tabs, which had no disclaimer at all.
+- **A one-time modal/interstitial disclaimer per session.** *Rejected:* doesn't satisfy
+  "persistently" shown; dismiss-and-forget defeats the purpose; a modal also reads as a
+  popup/interruption pattern this product avoids.
+- **A colored warning banner (e.g., amber alert bar).** *Rejected:* violates `CLAUDE.md`'s
+  "no full-width colored hero banners" / no-color-blocking rules — and a color-coded
+  disclaimer risks being misread as itself a risk signal, undermining its neutral intent.
+
+### Final Decision
+**Every analysis view (all 5 company tabs) persistently shows, in plain muted text with
+no background color:**
+
+> **"Algorithmic screening signal only. Not investment advice and not an accusation."**
+
+Implemented as a single footer block in `CompanyLayout`
+(`frontend/app/(app)/company/[ticker]/layout.tsx`) — plain `11px` muted-gray
+(`#B0ADA7`) text, centered, separated by a `border-t` hairline only (no `bg-[...]`),
+rendering on Overview/Financials/Governance/Narrative/Report without per-page
+duplication. This is **additive to**, not a replacement for, the Report tab's existing
+report-content disclaimer — the two answer different questions ("is this score an
+accusation" vs. "is this report text AI-generated/non-advisory").
+
+### Implications
+- **Frontend:** `layout.tsx` footer block — done, Phase 9 Step 6.
+- **Legal:** addresses the User-Ready blocker in OPUS review Decision #5. Per the review,
+  this disclaimer is the *minimum* mitigation; Phase 11's evidence traceability and a
+  "report an error" path complete it.
+- **Future:** any new top-level analysis surface (e.g., a comparison view, a new export
+  format) must add this disclaimer explicitly if it is not rendered inside
+  `CompanyLayout` — inclusion is not automatic outside that wrapper.
+
+### Future Reconsideration
+If legal counsel is engaged (enterprise track / Horizon 2), this exact wording may be
+revised by counsel. Any change is a dated amendment to this ADR — never a silent copy
+edit to the footer text.
+
+---
+
 # Minor Rulings
 
 Smaller decisions, recorded for completeness so they aren't silently reversed.
@@ -421,4 +532,4 @@ These are **ruled but not yet applied** — to be written into `CLAUDE.md` when 
 
 ---
 
-*End of ADR ledger. New major decisions are appended as ADR-013, ADR-014, … with the same structure. This file is authoritative; keep it honest.*
+*End of ADR ledger. New major decisions are appended as ADR-015, ADR-016, … with the same structure. This file is authoritative; keep it honest.*

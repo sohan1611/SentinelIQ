@@ -29,12 +29,12 @@ export function NarrativeTrendChart({ snapshots, actions }: NarrativeTrendChartP
   if (snapshots.length === 0) {
     return (
       <ChartFrame
-        title="Management Sentiment Over Time"
-        subtitle="Sentiment score derived from management commentary, per reporting period"
+        title="News Sentiment Over Time"
+        subtitle="Sentiment score derived from recent news headlines, per period"
         actions={actions}
       >
         <div className="flex items-center justify-center h-full font-sans text-sm text-text-muted text-center px-6">
-          Not enough management commentary to compute a sentiment trend.
+          Not enough recent news coverage to compute a sentiment trend.
         </div>
       </ChartFrame>
     )
@@ -67,8 +67,8 @@ export function NarrativeTrendChart({ snapshots, actions }: NarrativeTrendChartP
 
   return (
     <ChartFrame
-      title="Management Sentiment Over Time"
-      subtitle="Sentiment score derived from management commentary, per reporting period"
+      title="News Sentiment Over Time"
+      subtitle="Sentiment score derived from recent news headlines, per period"
       actions={actions}
     >
       <Line data={chartData} options={options} />

@@ -23,11 +23,10 @@ class ReportGenerator:
         if not flags_formatted:
             flags_formatted = "None detected."
 
-        # Extract contradictions directly from red flags if narrative type
-        contradictions = [f for f in flags if f.flag_type == "narrative"]
-        contradictions_formatted = "\n".join([f"- {c.description}" for c in contradictions])
+        tone_shifts = (analysis.module_details or {}).get("narrative", {}).get("tone_shifts", [])
+        contradictions_formatted = "\n".join([f"- {c['description']}" for c in tone_shifts])
         if not contradictions_formatted:
-            contradictions_formatted = "No significant contradictions found."
+            contradictions_formatted = "No significant news tone shifts detected."
 
         risk_level = FraudScorer().classify_risk(analysis.integrity_score or 50.0)
 

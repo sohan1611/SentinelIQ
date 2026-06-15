@@ -31,6 +31,12 @@ Amendments are explicit and dated — never silent behavioral changes inside a f
 > Forensics Engine — Algorithms for the current rules, and Error Handling rule 2a for how
 > this interacts with the existing per-module 50.0 fallback.
 
+> **Phase 9 amendment (2026-06-15):** Governance scoring no longer treats empty/thin news
+> coverage as a clean "100" — `GovernanceScorer.analyze` returns `50.0` with a
+> `low_confidence` marker when `news_text` is below `MIN_NEWS_TEXT_LENGTH` (40 characters),
+> and the Gemini call is skipped entirely. See "Analysis Pipeline — 7 Stages" Stage 3 and
+> Error Handling rule 2b for the full rule and its threshold.
+
 ---
 
 ## Git Commit Identity — MANDATORY
@@ -478,10 +484,12 @@ Stage 2: "Running financial forensics..."
 
 Stage 3: "Evaluating governance indicators..."
   → news_aggregator.fetch_news_text(ticker)
-  → governance_scorer.analyze(news_text) — temperature=0, returns
-    (score, flags, provenance)
+  → If len(news_text.strip()) < MIN_NEWS_TEXT_LENGTH (40 chars): governance = 50.0,
+    low_confidence = true, Gemini not called (Phase 9 — see Error Handling rule 2b)
+  → Else governance_scorer.analyze(news_text) — temperature=0, returns
+    (score, flags, provenance); provenance.low_confidence = true if this Gemini call fails
   → Save governance events as RedFlag records (flag_type="governance")
-  → module_details.governance.provenance ← provenance
+  → module_details.governance.{provenance, low_confidence} ← above
   → On failure: governance = None
 
 Stage 4: "Processing narrative consistency..."
@@ -553,6 +561,19 @@ DELETE /watchlist/{ticker}         remove company
     `integrity_score` and renormalized, not diluted with 50.0. The two rules don't
     conflict; they answer different questions ("the module ran but the data was thin" vs.
     "the module produced nothing at all").
+2b. **Empty governance ≠ 100 (Phase 9, 2026-06-15).** `GovernanceScorer.analyze` starts at
+    `100.0` and only deducts points for detected events — if `news_text` is empty or
+    near-empty, there is nothing to deduct and the module would otherwise report a
+    falsely pristine `100.0`. Fix: before calling Gemini, if
+    `len(news_text.strip()) < MIN_NEWS_TEXT_LENGTH` (40 chars — shorter than a single
+    typical headline), return `50.0` with `low_confidence: True` in the provenance
+    record, and skip the Gemini call entirely. The same `low_confidence: True` marker is
+    set if Gemini *is* called but the call fails (`events is None`) — both are "no real
+    signal" outcomes, distinct from a real review that found zero events
+    (`low_confidence: False`, `score == 100.0`, a legitimate "checked, all clear").
+    `low_confidence` is surfaced at `module_details.governance.low_confidence` and shown
+    as a disclaimer on the governance tab. This does not change rule 3 below — it adds a
+    pre-call short-circuit plus a confidence marker on top of it.
 3. Gemini API failure: log error, return None to caller, caller returns 50.0
 4. Bad ticker (yfinance returns nothing): raise HTTP 404
 5. Free tier limit (≥5 analyses/month): return HTTP 403 code LIMIT_REACHED

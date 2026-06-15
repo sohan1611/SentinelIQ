@@ -13,12 +13,12 @@ Module Scores:
   Cash Flow Integrity:    {cashflow_score}
   Governance Risk:        {governance_score}
   Earnings Quality:       {earnings_score}
-  Narrative Consistency:  {narrative_score}
+  News Tone (experimental, zero-weighted): {narrative_score}
 
 Red Flags Detected:
 {flags_formatted}
 
-Narrative Contradictions:
+News Tone Shifts (from recent headlines, not management statements):
 {contradictions_formatted}
 
 Write a report with these exact sections:
@@ -26,10 +26,14 @@ Write a report with these exact sections:
 ## Key Concerns
 ## Financial Analysis
 ## Governance Observations
-## Narrative Review
+## News Tone (Experimental)
 ## Analyst Note
 
 Key Concerns must be a bullet list using em-dash (—).
+The News Tone section covers sentiment in recent news headlines about
+the company. It is an experimental signal and does not factor into the
+Integrity Score. Do not describe it as management commentary, guidance,
+or an earnings call.
 Analyst Note is the concluding recommendation.
 The word "fraud" may only be used in the Analyst Note,
 once, if the score is below 40.

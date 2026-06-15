@@ -193,6 +193,12 @@ export default function CompanyLayout({
       <div className="w-full">
         <PageTransition>{children}</PageTransition>
       </div>
+
+      <div className="w-full border-t border-[#E3DFD8] mt-10 pt-4 pb-2">
+        <p className="font-sans text-[11px] text-[#B0ADA7] text-center">
+          Algorithmic screening signal only. Not investment advice and not an accusation.
+        </p>
+      </div>
     </div>
   );
 }
