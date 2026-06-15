@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from fastapi import FastAPI, HTTPException, Request
@@ -10,6 +11,7 @@ from app.api.health import router as health_router
 from app.api.v1.router import api_router
 from app.config import settings
 from app.database import engine
+from app.tasks.reaper import reaper_loop
 
 logger = logging.getLogger(__name__)
 
@@ -25,8 +27,10 @@ _STATUS_ERROR_CODES = {
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Schema is managed via Alembic migrations (alembic upgrade head) -- see CLAUDE.md
+    reaper_task = asyncio.create_task(reaper_loop())
     yield
     # Cleanup on shutdown
+    reaper_task.cancel()
     await engine.dispose()
 
 app = FastAPI(

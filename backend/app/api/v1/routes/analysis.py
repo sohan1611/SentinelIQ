@@ -112,6 +112,8 @@ async def get_analysis_status(analysis_id: str, db: AsyncSession = Depends(get_d
         stage = "Complete"
     elif analysis.status == "failed":
         stage = "Failed"
+    elif analysis.status == "error":
+        stage = "Analysis interrupted"
 
     status_str = analysis.status.split(":")[0] if ":" in analysis.status else analysis.status
 

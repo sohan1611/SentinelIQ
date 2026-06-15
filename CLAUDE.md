@@ -45,6 +45,22 @@ Amendments are explicit and dated — never silent behavioral changes inside a f
 > only fresh computations consume the 5/month free-tier quota; cache-hit re-opens are
 > still logged as `AnalysisRun` rows for the audit trail (ADR-007) but don't decrement it.
 > The `FREE_TIER_MONTHLY_LIMIT = 5` value itself is unchanged.
+>
+> **Step 3 — stuck-analysis reaper + terminal `"error"` status.** `backend/app/tasks/reaper.py`
+> runs an in-process `asyncio` loop (`reaper_loop`, started via `asyncio.create_task` in
+> `main.py`'s `lifespan`, cancelled on shutdown) that calls `reap_stuck_analyses` immediately
+> on startup and every `REAPER_INTERVAL_SECONDS` (120s) thereafter. It marks any
+> `AnalysisResult` with `status LIKE 'running:%'` and `run_at` older than
+> `STUCK_ANALYSIS_THRESHOLD_MINUTES` (10) as `status = "error"` — covering an in-process
+> background task killed mid-analysis by a Render free-tier spin-down/restart (ADR-012).
+> `"error"` is a **new terminal status** — it does NOT revive the retired `"failed"`
+> status (ADR-010 / Phase 3's status retirement is unchanged; the dead `"failed"` branches
+> in `get_analysis_status` and the frontend are left as-is, Phase 12 cleanup scope).
+> `get_analysis_status` maps `status == "error"` → `stage = "Analysis interrupted"`.
+> `frontend/lib/hooks/useAnalysis.ts` treats `"error"` as terminal alongside `"complete"`/
+> `"failed"`, stops polling, and sets `error = "Analysis was interrupted. Please retry."` —
+> the existing `analysisError ||` gates in `layout.tsx`'s status bar and `page.tsx`'s
+> empty state render this with no further changes.
 
 ---
 

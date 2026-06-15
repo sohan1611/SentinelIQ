@@ -39,11 +39,13 @@ export function useAnalysis(onComplete?: () => void): UseAnalysisResult {
         try {
           const result = await getAnalysisStatus(analysis_id)
           setStatus(result)
-          if (result.status === "complete" || result.status === "failed") {
+          if (result.status === "complete" || result.status === "failed" || result.status === "error") {
             stopPolling()
             setIsRunning(false)
             if (result.status === "complete") {
               onComplete?.()
+            } else if (result.status === "error") {
+              setError("Analysis was interrupted. Please retry.")
             }
           }
         } catch (err) {
