@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 
 from app.models.analysis_result import AnalysisResult
-from app.schemas.analysis import AnalysisResultResponse
+from app.schemas.analysis import AnalysisResultResponse, AnalysisHistoryItem
 
 
 def _module_details():
@@ -77,3 +77,19 @@ def test_module_details_none_for_pending_analysis():
     response = AnalysisResultResponse.model_validate(analysis)
 
     assert response.module_details is None
+
+
+def test_analysis_history_item_omits_module_details():
+    analysis = AnalysisResult(
+        id=uuid.uuid4(), company_id=uuid.uuid4(), run_at=datetime.utcnow(),
+        integrity_score=70.2, financial_score=70.0, cashflow_score=72.5,
+        governance_score=75.0, earnings_score=100.0, narrative_score=35.0, news_score=65.0,
+        module_details=_module_details(), status="complete",
+    )
+
+    response = AnalysisHistoryItem.model_validate(analysis)
+
+    assert response.integrity_score == 70.2
+    assert response.governance_score == 75.0
+    assert not hasattr(response, "module_details")
+    assert not hasattr(response, "status")

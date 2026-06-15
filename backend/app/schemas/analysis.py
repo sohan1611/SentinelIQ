@@ -62,6 +62,20 @@ class AnalysisResultResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class AnalysisHistoryItem(BaseModel):
+    id: UUID
+    run_at: datetime
+    integrity_score: Optional[float] = None
+    financial_score: Optional[float] = None
+    cashflow_score: Optional[float] = None
+    governance_score: Optional[float] = None
+    earnings_score: Optional[float] = None
+    narrative_score: Optional[float] = None
+    news_score: Optional[float] = None
+
+    class Config:
+        from_attributes = True
+
 class AnalysisStatusResponse(BaseModel):
     status: str
     integrity_score: Optional[float] = None

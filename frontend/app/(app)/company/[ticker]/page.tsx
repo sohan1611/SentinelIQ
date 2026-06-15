@@ -7,12 +7,14 @@ import { Badge } from "@/components/ui/Badge";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { ModuleScoreCard } from "@/components/modules/ScoreCard";
 import { RedFlagTimeline } from "@/components/charts/RedFlagTimeline";
+import { IntegrityScoreTrendChart } from "@/components/charts/IntegrityScoreTrendChart";
 import { RedFlagItem } from "@/components/modules/RedFlagItem";
 import { useStaggeredReveal } from "@/hooks/useStaggeredReveal";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useAddToWatchlist } from "@/lib/hooks/useAddToWatchlist";
 import { useCompanyData } from "@/lib/hooks/useCompanyData";
 import { useAnalysis } from "@/lib/hooks/useAnalysis";
+import { useAnalysisHistory } from "@/lib/hooks/useAnalysisHistory";
 import { getScoreColor } from "@/lib/utils/scoreColor";
 import { formatScore } from "@/lib/utils/formatNumber";
 import { formatDate } from "@/lib/utils/formatDate";
@@ -74,6 +76,7 @@ export default function CompanyOverviewPage({ params }: { params: { ticker: stri
   const { company, analysis, isLoading, error, refetch } = useCompanyData(ticker);
   const { status: analysisStatus, isRunning, error: analysisError, start } = useAnalysis(refetch);
   const { isAdding, add: handleAddToWatchlist } = useAddToWatchlist(ticker);
+  const { history, isLoading: isHistoryLoading } = useAnalysisHistory(ticker);
 
   const isLoaded = !isLoading;
   const { styles: moduleStyles, showSkeletons, skeletonStyle } = useStaggeredReveal(4, 40, isLoaded);
@@ -253,6 +256,11 @@ export default function CompanyOverviewPage({ params }: { params: { ticker: stri
                   />
                 </div>
               ))}
+            </div>
+
+            {/* Integrity Score Trend */}
+            <div style={moduleStyles[3]}>
+              <IntegrityScoreTrendChart history={history} isLoading={isHistoryLoading} />
             </div>
 
             {analysis.red_flags.length > 0 ? (

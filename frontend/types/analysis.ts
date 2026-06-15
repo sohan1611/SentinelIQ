@@ -116,6 +116,18 @@ export interface AnalysisResultWithFlags extends AnalysisResult {
   red_flags: RedFlag[];
 }
 
+export interface AnalysisHistoryItem {
+  id: string;
+  run_at: string;
+  integrity_score: number | null;
+  financial_score: number | null;
+  cashflow_score: number | null;
+  governance_score: number | null;
+  earnings_score: number | null;
+  narrative_score: number | null;
+  news_score: number | null;
+}
+
 export interface AnalysisStatus {
   status: string;
   integrity_score: number | null;

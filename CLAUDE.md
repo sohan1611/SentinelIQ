@@ -76,6 +76,33 @@ Amendments are explicit and dated — never silent behavioral changes inside a f
 > `correlation_id`/`ticker` plus its own `stage`. This lets a stuck analysis (Step 3's
 > reaper target) be traced to its last-logged stage across Render's log stream.
 
+> **Phase 11 amendment (2026-06-16):** Step 1 of the Analyst Workflow Layer adds
+> `GET /analysis/company/{ticker}/history` (`backend/app/api/v1/routes/analysis.py`),
+> returning up to `ANALYSIS_HISTORY_LIMIT` (24) `status == "complete"` `AnalysisResult`
+> rows for a company as lightweight `AnalysisHistoryItem` objects (`id`, `run_at`, and the
+> 7 score fields — `integrity_score` plus the 6 components — with `module_details` and
+> `status` omitted). The DB query is newest-first (so the `LIMIT` keeps the most recent
+> runs) and reversed before returning, so the response is chronological (oldest first) —
+> ready to feed an x-axis directly. 404 if the ticker/company doesn't exist (matching
+> `GET /company/{ticker}` and `GET /analysis/company/{ticker}`); `[]` (200) if the company
+> exists but has no completed analyses yet — "history" is naturally zero-or-more, unlike
+> the "latest analysis" endpoints which 404 on zero rows.
+>
+> Frontend: `IntegrityScoreTrendChart` (`frontend/components/charts/
+> IntegrityScoreTrendChart.tsx`) is a new chart built on `ChartFrame` (same pattern as
+> `DebtTrendChart`/`NarrativeTrendChart` — `baseChartOptions` + design tokens from
+> `lib/theme/tokens.ts`), fed by the new `useAnalysisHistory` hook
+> (`frontend/lib/hooks/useAnalysisHistory.ts`) and `getAnalysisHistory` API client fn
+> (`frontend/lib/api/analysis.ts`). Unlike the percent-based forensic charts, its y-axis is
+> fixed to `[0, 100]` (`options.scales.y.min/max`) since Integrity Score is always on that
+> scale (see "Risk classification" bands above) — a fixed axis lets an analyst compare the
+> line's position against those bands directly. It is wired into the Company Overview
+> page's right column, between the module-score grid and the red-flag sections. Empty
+> state (`history.length < 2` — a single point can't show a trend): "Run more analyses
+> over time to see how this company's Integrity Score has changed." A loading skeleton
+> (matching CLAUDE.md's "skeleton loaders only" rule) renders while the history fetch is
+> in flight, so the empty state never flashes before real data arrives.
+
 ---
 
 ## Git Commit Identity — MANDATORY
@@ -580,9 +607,10 @@ GET    /auth/me                    current user profile
 GET    /company/search?q=          ILIKE search, max 10 results
 GET    /company/{ticker}           company metadata, creates if new
 
-POST   /analysis/run               check free limit, trigger background task
-GET    /analysis/{id}/status       status + stage + elapsed (polled every 3s)
-GET    /analysis/company/{ticker}  latest completed result + red flags
+POST   /analysis/run                       check free limit, trigger background task
+GET    /analysis/{id}/status               status + stage + elapsed (polled every 3s)
+GET    /analysis/company/{ticker}          latest completed result + red flags
+GET    /analysis/company/{ticker}/history  score history, oldest first, for trend chart
 
 GET    /report/company/{ticker}    markdown report content
 

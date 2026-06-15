@@ -11,13 +11,14 @@ from app.models.company import Company
 from app.models.analysis_result import AnalysisResult
 from app.models.analysis_run import AnalysisRun
 from app.models.red_flag import RedFlag
-from app.schemas.analysis import AnalysisRunRequest, AnalysisRunResponse, AnalysisStatusResponse, AnalysisResultResponse, RedFlagResponse
+from app.schemas.analysis import AnalysisRunRequest, AnalysisRunResponse, AnalysisStatusResponse, AnalysisResultResponse, AnalysisHistoryItem, RedFlagResponse
 from app.tasks.analysis_worker import run_full_analysis
 
 router = APIRouter()
 
 FREE_TIER_MONTHLY_LIMIT = 5
 ANALYSIS_CACHE_TTL = timedelta(hours=6)
+ANALYSIS_HISTORY_LIMIT = 24
 
 
 def _free_tier_usage_query(user_id, since):
@@ -150,3 +151,22 @@ async def get_latest_analysis(ticker: str, db: AsyncSession = Depends(get_db)):
     result_dict["red_flags"] = [RedFlagResponse.model_validate(f).model_dump() for f in flags]
 
     return result_dict
+
+
+@router.get("/company/{ticker}/history", response_model=list[AnalysisHistoryItem])
+async def get_analysis_history(ticker: str, db: AsyncSession = Depends(get_db)):
+    ticker = ticker.upper()
+    comp_res = await db.execute(select(Company).where(Company.ticker == ticker))
+    company = comp_res.scalars().first()
+    if not company:
+        raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Company not found"}})
+
+    history_res = await db.execute(
+        select(AnalysisResult)
+        .where(AnalysisResult.company_id == company.id, AnalysisResult.status == "complete")
+        .order_by(AnalysisResult.run_at.desc())
+        .limit(ANALYSIS_HISTORY_LIMIT)
+    )
+    # Query is newest-first (so LIMIT keeps the most recent runs); reverse to
+    # chronological order for the trend chart's x-axis.
+    return list(reversed(history_res.scalars().all()))
