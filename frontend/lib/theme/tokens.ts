@@ -65,8 +65,11 @@ export const typeScale = {
  * classes; import this object directly into Chart.js `options` / `data`.
  */
 export const chartTheme = {
-  fontFamily: fonts.sans,
-  numericFontFamily: fonts.mono,
+  // Literal font stacks, not fonts.sans/mono — Canvas's ctx.font (used by Chart.js)
+  // cannot resolve var(--font-sans) custom properties. Must match globals.css's
+  // --font-sans / --font-mono values.
+  fontFamily: "Inter, system-ui, sans-serif",
+  numericFontFamily: "'IBM Plex Mono', monospace",
   labelFontSize: 11,
   numericFontSize: 12,
   gridColor: colors.border,

@@ -28,7 +28,7 @@ class DebtStressModule(BaseForensicModule):
             debt_growth = (curr.total_debt - prev.total_debt) / abs(prev.total_debt) if prev.total_debt != 0 else 0
             
             interest_expense_proxy = curr.total_debt * 0.05
-            interest_coverage = curr.operating_cf / interest_expense_proxy if interest_expense_proxy != 0 else float('inf')
+            interest_coverage = curr.operating_cf / interest_expense_proxy if interest_expense_proxy != 0 else None
             
             details["debt_metrics"].append({
                 "period": curr.period,
@@ -45,8 +45,8 @@ class DebtStressModule(BaseForensicModule):
                 
             if debt_growth > 0.30:
                 period_score_deduction += 15
-                
-            if interest_coverage < 2.0:
+
+            if interest_coverage is not None and interest_coverage < 2.0:
                 period_score_deduction += 20
                 
             score -= period_score_deduction

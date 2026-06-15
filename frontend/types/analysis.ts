@@ -36,7 +36,7 @@ export interface DebtMetricPoint {
   period: string;
   debt_to_revenue: number;
   debt_growth: number;
-  interest_coverage: number;
+  interest_coverage: number | null;
 }
 
 export interface NarrativeSnapshotData {
