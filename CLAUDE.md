@@ -705,12 +705,19 @@ Frontend → Vercel
 Backend → Render
   Connect GitHub repo
   Build command: pip install -r requirements.txt
-  Start command: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+  Start command: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+  Health check path: /health
   Set all env vars in Render dashboard
 
 Database → Render PostgreSQL (free tier, 1GB)
-  Copy the connection string to DATABASE_URL
+  Copy the connection string, rewrite scheme to postgresql+asyncpg:// for DATABASE_URL
 ```
+
+See `docs/deployment.md` for the full setup playbook (env var table, scheme-rewrite
+gotcha, post-deploy verification checklist) and the Phase 10 Step 5 dry-run results
+(offline `alembic upgrade head --sql` against the full 8-table baseline + `analysis_runs`
++ `counted`, and a clean `npm run build`). Per ADR-012, creating the Render/Vercel
+projects, connecting GitHub, and setting secrets are owner-in-the-loop actions.
 
 ---
 
