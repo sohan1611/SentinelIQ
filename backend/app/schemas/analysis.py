@@ -14,6 +14,37 @@ class RedFlagResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class NarrativeSnapshotResponse(BaseModel):
+    id: UUID
+    company_id: UUID
+    period: Optional[str] = None
+    statement_text: Optional[str] = None
+    sentiment_label: Optional[str] = None
+    sentiment_score: Optional[float] = None
+    source: Optional[str] = None
+    fetched_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+class NarrativeModuleDetails(BaseModel):
+    snapshots: List[Dict[str, Any]] = []
+    statements_used: int = 0
+    provenance: List[Dict[str, Any]] = []
+
+class GovernanceModuleDetails(BaseModel):
+    provenance: Dict[str, Any] = {}
+
+class ModuleDetails(BaseModel):
+    scores: Dict[str, float] = {}
+    confidence: Optional[str] = None
+    revenue: Dict[str, Any] = {}
+    cashflow: Dict[str, Any] = {}
+    earnings: Dict[str, Any] = {}
+    debt: Dict[str, Any] = {}
+    narrative: NarrativeModuleDetails = NarrativeModuleDetails()
+    governance: GovernanceModuleDetails = GovernanceModuleDetails()
+
 class AnalysisResultResponse(BaseModel):
     id: UUID
     company_id: UUID
@@ -25,7 +56,7 @@ class AnalysisResultResponse(BaseModel):
     earnings_score: Optional[float] = None
     narrative_score: Optional[float] = None
     news_score: Optional[float] = None
-    module_details: Optional[Dict[str, Any]] = None
+    module_details: Optional[ModuleDetails] = None
     status: str
 
     class Config:
