@@ -192,6 +192,13 @@ async def test_happy_path_completes_with_full_module_details(monkeypatch, compan
     assert analysis.module_details["narrative"]["provenance"] == NARRATIVE_RESULT[3]
     assert analysis.module_details["narrative"]["statements_used"] == 2
 
+    # --- Narrative tone shifts (Phase 9): contradictions surface as
+    # module_details data, not RedFlag rows -- see flag_types assertions below.
+    assert analysis.module_details["narrative"]["tone_shifts"] == [
+        {"period": "2023-02", "severity": "high",
+         "description": "Significant tone shift between 2023-01 and 2023-02 (Score diff: 1.40)"}
+    ]
+
     # --- Persisted rows ------------------------------------------------------
     added_by_type = {}
     for obj in fake_session.added:
@@ -202,11 +209,13 @@ async def test_happy_path_completes_with_full_module_details(monkeypatch, compan
     assert len(added_by_type[Report]) == 1
     assert added_by_type[Report][0].content == "# Report\nAll good."
 
-    # RedFlags: forensics (>=2 from the 2021->2022 pair) + 1 governance + 1 narrative contradiction.
+    # RedFlags: forensics (>=2 from the 2021->2022 pair) + 1 governance.
+    # Narrative contradictions are no longer persisted as RedFlag rows (Phase 9,
+    # see tone_shifts assertion above) -- "narrative" must not appear here.
     flag_types = [f.flag_type for f in added_by_type[RedFlag]]
-    assert len(flag_types) >= 4
+    assert len(flag_types) >= 3
     assert "governance" in flag_types
-    assert "narrative" in flag_types
+    assert "narrative" not in flag_types
 
 
 async def test_governance_stage_failure_does_not_abort_pipeline(monkeypatch, company, analysis, fake_session):
