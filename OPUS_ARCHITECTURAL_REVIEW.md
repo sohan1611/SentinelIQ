@@ -1,314 +1,249 @@
-# SentinelIQ — Architectural Review & Roadmap
+# SentinelIQ — Architectural Review & Roadmap (v2, AUTHORITATIVE)
+
 **Author:** Claude Opus, acting as Chief Architect / CTO / Product Strategist
 **Audience:** Claude Sonnet (Lead Implementation Engineer), and the project owner
-**Date:** 2026-06-14
-**Inputs reviewed:** Sonnet's `PROJECT_STATUS_FOR_OPUS.md` (full), `CLAUDE.md` (the constitution), and a targeted re-read of the load-bearing source files (`analysis_worker.py`, `fraud_scorer.py`, `routes/analysis.py`, `gemini_client.py`, `(app)/layout.tsx`, `globals.css`) to verify the audit's most consequential claims before issuing rulings.
+**Date:** 2026-06-15
+**Supersedes:** v1 (2026-06-14), whose forward roadmap (Phases 1–11) is now consumed — Phases 1–8 are complete and verified. This document is the **authoritative architectural guide for all future implementation phases.**
+**Inputs reviewed:** a direct, code-level re-read this session of the load-bearing source — `analysis_worker.py`, `fraud_scorer.py`, all four forensic modules, `gemini_client.py`, `governance_scorer.py`, `consistency_engine.py`, `news_aggregator.py`, `report_generator.py`, `routes/analysis.py`, `main.py`, `database.py`, and the company overview page — plus `PROJECT_STATUS_FOR_OPUS.md` (the as-built verification) and the ADR ledger. Where a claim rests on prior-session verification rather than this turn's read, it is marked.
 
-> **Status of this document:** This is a review and a plan, not code. No production files were modified. On a future **"Start new phase"** command, Sonnet executes exactly **one** phase from §6/§7, fully, then writes a completion report and stops.
+> **Status & use of this document.** This is a review and a plan, not code. On a future **"Start new phase"** command, Sonnet reads this file, executes exactly **one** phase from §7/§8, fully, writes a `## Phase Completion Report`, and stops. Design direction lives in `ARCHITECTURAL_DECISIONS.md` (ADR-002/003) and `CLAUDE.md`; the as-built state of Phases 1–8 lives in `PROJECT_STATUS_FOR_OPUS.md`. This doc is authoritative for *what comes next and why*.
 
 ---
 
-## 0. Executive Summary & How I Read Sonnet's Audit
+## 0. Owner Rulings (BINDING — 2026-06-15)
 
-Sonnet's audit is **excellent** — thorough, honest, correctly prioritized at the file level, and it found every bug that matters. I verified its load-bearing claims against source and they hold. Where I add value is at the altitude Sonnet explicitly deferred to me: **resolving the open architectural decisions, reframing three findings that are more serious than they first appear, elevating one priority Sonnet under-weighted, and setting product/UI direction.**
+Two decisions were escalated to the owner during this review and are now resolved. They are binding and should be ratified into `ARCHITECTURAL_DECISIONS.md` as ADR-013 and ADR-014 in Phase 9 (which already touches docs).
 
-**The one-sentence state of the project:** *SentinelIQ has a genuinely strong, spec-compliant quantitative forensic core wrapped in a single-company demo UI that is still 100% mock — but the score that core produces is not yet honest, not yet reproducible, not yet tested, and not yet metered correctly, and those four things matter more than wiring another screen.*
+**Ruling A — Cache-hit quota (amends ADR-007).** A cached re-open **does not consume** a free user's monthly quota. Only a *fresh computation* counts against the 5/month limit. The `AnalysisRun` row should still be written on a cache hit (audit trail preserved), but flagged so it is **excluded from the quota count**. Implementation in Phase 10, §8.
 
-**Where I diverge from Sonnet's prioritization (the headlines):**
+**Ruling B — Legal disclaimer wording (becomes ADR-014).** Every analysis view shows, persistently:
 
-1. **The Stage 6 bug is worse than documented.** It's not just "the pipeline aborts." The `fetch_news_sentiment` **network call sits inside the same `try` block as the persistence of the already-computed forensic scores** (`analysis_worker.py:150–176`). A transient news/RSS hiccup therefore **throws away the revenue/cashflow/earnings/debt scores that already succeeded in Stage 2/3**, marks the whole run `failed`, and skips the report. The most expensive, most reliable work in the pipeline is gated behind its flakiest, cheapest call.
+> **"Algorithmic screening signal only. Not investment advice and not an accusation."**
 
-2. **The narrative stub doesn't just "return 50" — it actively poisons every score.** Because `fraud_scorer` blends a fixed `50.0 × 0.10` term into *every* company's Integrity Score (`fraud_scorer.py:8`), and narrative is *always* 50, **10% of every score in the product is a constant.** Combined with the weighting, ~35% of the headline number is currently weak AI/news signal and a third of *that* is literal noise pulling every company toward the middle. This is a **scoring-credibility** problem, not a missing-feature problem.
+The owner has reserved the right to expand this before any public release. Implementation in Phase 9, §8.
 
-3. **The score is not reproducible.** `gemini_client.py` runs at Gemini's **default temperature (~1.0)** with no `generation_config` — so the governance score, narrative score, and report prose **change run-to-run for the same company**. For a tool whose entire pitch is "can this company be trusted with billion-dollar decisions," a score that won't reproduce is a foundational defect, not a polish item.
+---
 
-4. **Testing is a credibility issue, not a "Low priority" nice-to-have.** Sonnet correctly noted zero tests but ranked it low. I am elevating it: the forensic engine is **deterministic pure math with formulas written down in CLAUDE.md** — it is simultaneously the product's entire credibility *and* the single easiest thing in the codebase to test. You cannot sell "institutional-grade fraud detection" on an unverified scoring engine. This gets its own early phase plus CI.
+## 1. Executive Summary
 
-5. **`frontend/Dockerfile` is not Critical.** Sonnet flagged it Critical #6. Vercel — the documented frontend host — **does not use a Dockerfile**; it builds Next.js natively. The missing file only breaks the local `docker-compose` convenience path. It's worth fixing for local parity, but it is **High at most**, not a deployment blocker. I'm downgrading it.
+Phases 1–8 are complete and, on the whole, **genuinely strong work** — the engineering is well above typical MVP quality. The stage-isolated pipeline, weight renormalization, AI provenance capture, Alembic baseline, global error envelope, and JS-accessible design tokens are all correct and well-built. I verified the load-bearing claims against source; they hold.
 
-**The four decisions Sonnet escalated to me — resolved here, up front, because the roadmap depends on them:**
+**The one-sentence state of the project:** *SentinelIQ now has an honest, reproducible, tested quantitative core wrapped in a real (no longer mock) single-company UI — but three small defects let the product display claims it cannot defend, one reliability gap will produce stuck analyses on the deployment target, and the narrative module is honest in its score weighting yet dishonest in its labeling.*
 
-| # | Decision Sonnet deferred | My ruling | One-line rationale |
+**Where the work is strongest (protect, don't touch):**
+- **Pipeline correctness.** `analysis_worker.py:256` runs stages in an isolated loop; `database.py:14` sets `expire_on_commit=False`, which is precisely what makes it safe for the report stage to read flag/snapshot ORM objects collected across earlier commits. This pairing is subtle and correct.
+- **Scoring math.** `fraud_scorer.compute_integrity_score` (`fraud_scorer.py:14`) renormalizes over modules with real signal, honors the `None`-vs-`50.0` distinction, and degrades to `(50.0, "low")` when nothing is available. All four forensic modules match CLAUDE.md's formulas exactly, including the divide-by-zero guards.
+- **Data & error foundations.** `AnalysisRun` cleanly separates metering from cacheable results; the three-handler error envelope (`main.py:44`) is correct and avoids double-wrapping.
+
+**Where it falls short (the headlines of this review):**
+
+1. **[Credibility] The narrative module mislabels news headlines as "management commentary"** and persists news-cycle mood swings as forensic "narrative" red flags. Zero-weighting (ADR-006) protected the *score*; it did not protect the *flags, snapshots, or report prose*. This is the most important finding.
+2. **[Credibility] Missing scores render as a red `0.0`.** A failed module (`None`) is visually identical to a real catastrophic score (`page.tsx:181`, `analysis[key] ?? 0`). This silently violates ADR-005's "missing-data honest, not silent."
+3. **[Credibility] No news coverage yields a perfect `100.0` governance score** (`governance_scorer.py:26`) — absence of signal masquerading as positive signal.
+4. **[Reliability] In-process `BackgroundTasks` + no reaper + Render free-tier spin-down = permanently stuck analyses** (`analysis.py:78`). The frontend polls a `running:` row forever.
+5. **[Legal] No disclaimers anywhere** on a product that publishes algorithmic fraud-risk judgments about real, named public companies. Resolved by Ruling B; must ship.
+
+None of these require rework. All are surgical. The fix order is deliberate: **make the output honest (Phase 9), make the backend reliable and live (Phase 10), then build the analyst workflow (Phase 11)** — never the reverse.
+
+---
+
+## 2. Review of Completed Phases (1–8)
+
+| Phase | Commit | Grade | Verdict |
 |---|---|---|---|
-| 1 | Per-user analysis tracking: `user_id` on `AnalysisResult` **vs.** separate log table | **Separate `AnalysisRun` table.** `AnalysisResult` stays company-scoped. | Analysis is an expensive, **cacheable, shareable** artifact; *runs* are user-scoped metered events. Splitting them fixes the quota bug, avoids recomputing AAPL per user, and gives the **audit trail** institutional buyers require. |
-| 2 | Narrative fix scope: cheap news-derived statements **vs.** build transcript pipeline | **Cheap news-derived statements now**, transcripts deferred to Horizon 2. **And** fix the scorer to renormalize, not dilute. | Ship an *honest* narrative signal this week using data we already fetch; don't block the core on an SEC/transcript scraper. |
-| 3 | ToastContext: code-to-spec **vs.** spec-to-code | **Code conforms to CLAUDE.md** (translateX enter, 3000ms, max-3). | CLAUDE.md is the constitution. Code bends to it, not the reverse, unless we deliberately amend the constitution. |
-| 4 | The 8 empty backend stubs + deployment shape | **Delete the stubs** in the cleanup phase; track their *intent* in this roadmap. Confirm Vercel/Render shape at deploy time with the owner. | Empty files are not a plan. The roadmap is the plan. Re-create a file when its feature is actually scheduled. |
+| 1 — Shell Hardening | `e1aef878` | **Excellent** | Guard, primitives, JS tokens clean. Nothing to fix. |
+| 2 — Overview wiring | `36580d51` | **Needs Revision** | Real data wiring good; **null renders as red 0.0**; confidence ignored in favor of a hand-rolled period heuristic. |
+| 3 — Scoring pipeline | `bbb092f4` | **Good (architecture) / Needs Revision (narrative substance)** | Stage isolation, renormalization, provenance are textbook-correct. Narrative is fed semantically wrong inputs. |
+| 4 — Tests + CI | `1c193813` | **Good** | 70 tests collect; backtests now real (`backend/scripts/`); CI present. Duplicate 0-byte stubs at repo root; assertion quality not graded this review. |
+| 5 — Data foundation | `4e968b0c` | **Excellent** | AnalysisRun, Alembic, error envelope correct. Minor: check-then-act race; cache-hit metering (now corrected by Ruling A). |
+| 6 — Financials charts | `58ab07b8` | **Good** | Clean ChartFrame reuse, empty states. (Relied on prior read + page structure.) |
+| 7 — Governance/Narrative | `63029f0b` | **Good / Needs Revision** | Governance wiring good; narrative tab inherits Phase 3's substance problem. Dead `RiskRadar.tsx` stub. |
+| 8 — Report + exports | `88e99b8c` | **Good** | Markdown rendering solid; report prose propagates the narrative mislabel; PDF is `window.print()` (acceptable MVP). |
 
-One scoring change above (renormalize weights instead of blending in 50, and temporarily drop narrative from the weighting until it is real) is a **deliberate amendment to CLAUDE.md's scoring philosophy.** It must be made explicitly — updating CLAUDE.md in the same phase — not slipped in silently. CLAUDE.md currently says "return 50.0 (neutral)"; I am proposing we evolve that rule, with reasons, in §6 Phase 3.
+### Detailed findings (by severity, with evidence)
 
----
+**[Blocker-class, small fixes — product makes claims it cannot defend]**
 
-# 1. Architectural Review
+- **N-1 — Narrative = news headlines mislabeled as management commentary.** `fetch_news_statements` (`news_aggregator.py:72`) returns Google News *headlines* tagged `source:"News"`, period = article publish date. `ConsistencyEngine` (`consistency_engine.py:46`) scores each, then flags "significant tone shift between {period} and {period}" as a **narrative red flag** (`severity high/moderate`). A positive headline Monday + negative Wednesday becomes a forensic "contradiction." The frontend labels the module "tone and consistency of *management commentary* across reporting periods" (`page.tsx:58`) and the report calls it "linguistic analysis of recent management commentary." It is not. Fix: stop persisting narrative red flags, relabel as "News Tone (experimental)," correct the report framing. (Phase 9.)
+- **N-2 — Missing scores render as red 0.0.** Worker stores `None` for a failed module (`analysis_worker.py:185`); API returns null; overview does `analysis[key] ?? 0` (`page.tsx:181`) → full-width severe-red bar at 0.0. A Gemini outage is indistinguishable from a catastrophic finding. Fix: render "—/Unavailable," never a risk color, for null. (Phase 9.)
+- **N-3 — Empty governance → 100.** `GovernanceScorer.analyze` starts at 100 and only deducts (`governance_scorer.py:26`); empty events → pristine 100. Obscure/thin-news companies score falsely perfect. Fix: neutral 50 + low-confidence when input is empty/below a minimum. (Phase 9.)
 
-## 1.1 What is genuinely strong (do not touch)
+**[High — reliability]**
 
-- **The forensic engine (`core/forensics/`).** Four pure, well-separated modules + a runner, each matching CLAUDE.md's formulas (Sloan accrual ratio, revenue/OCF divergence, margin-delta/CV, debt-to-revenue/interest-coverage). Pure functions, no I/O, no hidden state. This is the best-engineered part of the system and the product's actual differentiator. **Protect it with tests; don't refactor it.**
-- **Layering & externalized AI prompts.** Forensics / governance / narrative / scoring / AI / services are cleanly separated, and Gemini prompts live in `.txt` files loaded at runtime — exactly right, and rare discipline for a project this young.
-- **Async-first stack, UUID primary keys.** FastAPI async + async SQLAlchemy + asyncpg is the correct modern choice. UUID PKs are the right institutional default (non-enumerable, mergeable, safe to expose).
-- **The frontend hook layer.** `useCompanyData` / `useAnalysis` / `useWatchlist` are already wired and typed; the remaining tab work is mechanical consumption, not new plumbing.
-- **The design constitution itself.** CLAUDE.md's design system is unusually mature and tasteful (see §3). Most projects this age have no design discipline; SentinelIQ has a strong, opinionated one. The `globals.css` foundation (timing/easing/font tokens, tabular-nums, reduced-motion, focus rings, **and an existing print stylesheet**) is already in place.
+- **R-1 — Stuck analyses.** `background_tasks.add_task(run_full_analysis, …)` (`analysis.py:78`) is in-process; no reaper, no terminal timeout. A Render free-tier spin-down mid-run freezes the row at `running:` and the UI polls forever. Fix: `/health` + a reaper marking stale `running:` rows as a terminal `"error"` the UI handles. (Phase 10.)
+- **R-2 — Free-tier metering.** Cache hits burn quota (corrected by Ruling A); count-then-insert is race-able at the boundary (low stakes; note it). (Phase 10.)
 
-## 1.2 Critical correctness defects (the score is not yet trustworthy)
+**[Medium — honesty/quality debt]**
 
-These are ordered by how directly they undermine the product's core claim.
+- **M-1 — Shallow provenance.** `raw_response` stores the extracted `.text`, not the true API response (`gemini_client.py:76`) — loses `finish_reason`, safety blocks, token counts, exactly what an audit needs when a score looks wrong. (Phase 11 or opportunistic.)
+- **M-2 — Confidence not surfaced.** `module_details.confidence` exists; the page recomputes its own `periodCount` (`page.tsx:73`) instead. Two sources of truth. (Phase 9.)
+- **M-3 — News sentiment is a negation-blind keyword bag** (`news_aggregator.py:45`) over partly-dead feeds (Reuters businessNews is generic + deprecated). Weight 0.1111, low blast radius; acknowledge. (Phase 12 / Horizon 2.)
+- **M-4 — Three redundant fetches of the same Google News feed per analysis** + a duplicate `import time` (`news_aggregator.py:39`). (Phase 12.)
+- **M-5 — No HTTP schema validation on AI JSON.** A parseable-but-malformed governance object (`severity:"kinda bad"`) silently falls through to a 15-pt deduction via `.get("severity","moderate")`. (Phase 11.)
 
-### C-1 — The Integrity Score is diluted by a hardcoded constant (`fraud_scorer.py:8`, `analysis_worker.py:121`)
-Narrative is always 50; the scorer always blends `50 × 0.10` in. Every score in the product carries a fixed 5-point pull toward the mean that represents *no information*. **Fix (Phase 3):** feed the narrative engine real multi-statement input from the news text we already fetch, **and** change the scorer to **renormalize weights across the modules that actually produced a signal** rather than substituting 50 for missing ones. A company with no narrative data should be scored on what *is* known, not muddied by a neutral guess. *(This amends CLAUDE.md's "return 50.0 neutral" rule — make the amendment explicit.)*
-
-### C-2 — Stage 6 discards completed work on a flaky network call (`analysis_worker.py:147–176`)
-As verified: the news fetch and the persistence of already-computed forensic scores share one `try`. A news hiccup → `status="failed"`, no scores saved, no report. **Fix (Phase 3):** give the news fetch its own try/fallback (neutral 50, like every other stage), then make **persistence a separate, near-infallible step**, and ensure Stage 7 always runs. This restores CLAUDE.md's promised "pipeline never aborts on a single-stage failure" invariant — which every stage *except* this one already honors.
-
-### C-3 — The score is not reproducible (`gemini_client.py:10–17`)
-Default Gemini temperature; same input → different governance/narrative scores and different report prose across runs. **Fix (Phase 3):** set `generation_config={"temperature": 0}`, and **persist the exact prompt, model id, and raw response into `module_details`** so any score is auditable and reproducible after the fact. Determinism + provenance is non-negotiable for a forensic product.
-
-### C-4 — Free-tier metering is structurally broken (`routes/analysis.py:34–44`)
-Verified: the count joins `AnalysisResult → WatchlistItem` because `AnalysisResult` has no `user_id` (the code's own comments agonize over this). It both under- and over-counts. **Fix (Phase 5):** the `AnalysisRun` table (Decision #1). Count runs by `user_id` + month. Clean, correct, and it doubles as the audit log.
-
-### C-5 — No route protection (`(app)/layout.tsx` — verified: no auth check at all)
-The authenticated shell is `ToastProvider > AppShell > PageTransition` with **zero** `useAuth`/redirect. Every protected route is reachable unauthenticated. **Fix (Phase 1):** guard the layout (redirect to `/login` once `!isLoading && !user`, with no auth-resolution flash).
-
-### C-6 — No migrations; schema born from `create_all` (Alembic `versions/` empty)
-Blocks any clean managed-Postgres deploy and leaves schema evolution with no path. **Fix (Phase 5):** generate a baseline migration (including `AnalysisRun`), `stamp` the existing dev DB, and retire `create_all` in production.
-
-## 1.3 Reliability & scalability risks (architecture, not bugs)
-
-- **In-process `BackgroundTasks` + Render free-tier spin-down = lost analyses.** Verified `background_tasks.add_task(run_full_analysis, …)`. There is no queue, no retry, no idempotency. Render's free tier **spins the instance down after ~15 min idle**; an analysis in flight during a restart is stuck at `pending`/`running:` **forever**, and the polling UI waits indefinitely. **Mitigation (Phase 11, cheap):** a startup "reaper" that marks any `running` analysis older than ~10 min as `failed`, plus a `/health` endpoint. **Long term (Horizon 2):** a real job queue — but that breaks the $0/month constraint, so defer deliberately.
-- **Process-local cache is a hidden single-instance constraint.** `cache.py` and the background-task model *both* silently assume one instance. The moment a second replica exists, the cache stops sharing and job state fragments. This constraint should be **documented as an explicit architectural decision**, not discovered in production.
-- **Gemini free-tier ceiling.** 1,500 req/day, and each analysis makes several Gemini calls (governance + per-statement narrative + report). Real-world ceiling is ~150–300 analyses/day **across all users**, with **no 429 backoff** in `gemini_client`. Fine for demo; a known wall for load. Add retry/backoff when narrative goes multi-statement (Phase 3).
-- **`analysis_worker.py` coupling.** One ~200-line function instantiating six engines, sequencing seven stages, and doing raw writes for five models. Sonnet flagged this correctly. **My prescription:** when Phase 3 touches it, refactor to a **uniform stage loop** — a list of `(name, coroutine)` stages, each isolated by the *orchestrator's* try/except with a neutral fallback, accumulating into a shared context. This makes C-2 *structurally impossible to reintroduce*, makes each stage unit-testable, and is a smaller change than it sounds. Do it *as part of* the Phase 3 fix, not as a separate refactor.
-
-## 1.4 Data-model & sourcing ceilings (honest limits, not MVP blockers)
-
-- **`AnalysisResult` should stay company-scoped; add `AnalysisRun` for users.** (Decision #1.) This also makes the documented 6h analysis cache meaningful: a second user requesting AAPL within the TTL gets the cached `AnalysisResult` *and* a logged `AnalysisRun` (metered, no recompute).
-- **`module_details` as schemaless JSON is acceptable — but validate it hard at the boundary.** The frontend tabs (Phases 2, 6, 7) will trust this shape. Pydantic schemas for `module_details` and `NarrativeSnapshot` (the two Sonnet found missing) must be rigorous so the UI can rely on them.
-- **Point-in-time data is the deep ceiling.** yfinance returns *current* (often *restated*) figures — and restatements are exactly the fraud signal we hunt. Without as-of-filing-date data, the engine can be blind to the very manipulation it's designed to catch. This is a genuine credibility ceiling versus a Bloomberg/CapitalIQ-backed tool. **Not an MVP blocker — but state it honestly in `docs/data-sources.md` and never let marketing imply filing-grade provenance we don't have.**
-- **No confidence/completeness signal.** A 2-period company and a 12-period company render the same authoritative gauge. False precision is how institutional users learn to distrust a tool. Surface a **data-completeness/confidence indicator** (compute in Phase 3, show in Phase 2).
-
-## 1.5 Security & auth posture
-
-JWT+bcrypt is fine for MVP, but the posture is **consumer-grade** and institutional buyers will eventually require more: no refresh tokens (hard 60-min logout — painful for an all-day terminal), no revocation, no RBAC (every user can do everything), no SSO/SAML/MFA, no auth audit logging. **None are MVP blockers**; all are predictable enterprise-sales requirements. Flag as Horizon 2; the `AnalysisRun` audit table (Phase 5) is the first foundation stone toward it.
+**[Low — cosmetic/dead code]** dead `status=="failed"` branches (`analysis.py:103`, `page.tsx:149`); two 0-byte `scripts/backtest_*.py` at repo root; unused 1-byte `RiskRadar.tsx`; `classify_risk` risk-banding duplicated backend/frontend; `google.generativeai` is the deprecated SDK and `gemini-1.5-flash` is a generation behind. (Phase 12.)
 
 ---
 
-# 2. Product Review — as a premium institutional intelligence platform
+## 3. Architectural Review
 
-Judged against the bar the owner set (Bloomberg / Aladdin / Palantir / Goldman internal tools), here is the honest gap.
-
-**What the product *is* today:** a single-company, one-shot scorer. Type a ticker → wait ~60s → read a score and an AI report. The quant core behind it is real and good. But the *workflow* around it is a demo, not an analyst's tool.
-
-**What feels unfinished (beyond "the tabs are mock"):**
-- **No investigation workflow.** Analysts don't run one score; they build a case. There is no saved investigation, no analyst notes/annotations, no dossier, no "flag this for review."
-- **No export.** Institutional users *live in Excel and PDF.* The "Export PDF" button is a no-op and there is no CSV/XLSX export of the underlying forensic series. This is table stakes, not a feature.
-- **No drill-down to evidence.** A red flag should link to the exact financial line items / news article that triggered it. Right now a flag is an assertion with no traceable provenance — the opposite of forensic.
-- **No history, though the data exists.** Every run creates an `AnalysisResult`; the DB *already accumulates* a company's score over time. But the API only ever returns the latest. **Surfacing an integrity-score trend is high value at near-zero data cost** — it's already in the database.
-- **Watchlist is a bookmark list, not a monitored portfolio.** No auto-rescore, no change alerts. The empty `tasks/data_refresh.py` stub shows someone *intended* this.
-
-**The features premium users will expect (and the monetization path):**
-1. **Portfolio monitoring + alerting** — "score all 47 names in my fund nightly; alert me when any score drops a band." This is the single highest-value institutional capability *and* the natural Pro/Enterprise tier. (Horizon 2.)
-2. **Sector-relative benchmarking** — absolute thresholds misjudge a capital-intensive utility vs. a SaaS firm. "AAPL's accrual ratio vs. its sector" is how analysts actually think.
-3. **Export & shareable reports** (Phase 8).
-4. **Evidence drill-down & company score history** (Phase 9 — both cheap because the data already exists).
-5. **Collaboration** (sharing, comments, assignment) and **RBAC/SSO** — enterprise-sales requirements. (Horizon 2.)
-
-**The strategic read:** the order is (a) make the core **honest** (Phase 3) and **verified** (Phase 4), (b) make it **visible** (Phases 2, 6, 7, 8), (c) make it an **analyst workflow** (Phase 9 — history, drill-down, ⌘K), then (d) make it **proactive and defensible** (Horizon 2 — monitoring, alerts, audit, benchmarking). Don't build workflow on top of a score you can't yet trust or reproduce.
+- **System architecture — Good, one honest ceiling.** Clean separation (forensics / AI engines / scoring / orchestration / routes); adding a forensic module is localized. The one extensibility wart: `analysis_worker.py` hardcodes the `financial=(revenue+debt)/2` blend and the stage list — fine now, a config-driven registry later. Technical debt is low and localized.
+- **Backend — Good.** RESTful, consistent envelope. Gaps: no HTTP rate limiting (only the business gate); no structured logging / request IDs (bare-string `logger.error` is un-greppable in aggregate); no `/health`; no metrics/tracing. Auth (JWT/bcrypt) MVP-adequate (prior ruling); no refresh/revocation.
+- **Frontend — Good.** Clean hierarchy + token system; constitution respected. State is per-page hooks + polling; no shared cache, so Overview→Financials→Governance re-fetches the same analysis three times (Phase 11 query cache). Accessibility unverified — custom gauge/bars likely need ARIA. The null-as-zero bug (N-2) is the one correctness defect.
+- **Database — Excellent for the stage.** Sound schema; `AnalysisRun` separation is right; Alembic is the source of truth. Forward risk: `module_details` is free-form JSON with no schema validation and the UI reaches deep into it with optional chaining — a backend shape change fails silently in the UI. Add a versioned Pydantic schema + `schema_version` before it grows.
+- **AI systems — the weakest pillar.** Prompts externalized, `temperature=0` for score-bearing calls, default temp for prose (correct per ADR-004). But: hallucination risk is high and under-controlled — governance extraction asks an LLM to name governance events from headlines with **no source-citation requirement and no grounding check**, and those become persisted RedFlags about real companies. JSON parsing has no schema validation (M-5). Cost: ~7 Gemini calls/analysis (1 governance + up to 5 narrative + 1 report); ~200 analyses/day exhausts the free tier, and the biggest spender (narrative, 5 calls) carries *zero weight* — economically backwards until transcripts (H1).
 
 ---
 
-# 3. UI / UX Philosophy
+## 4. Product Review
 
-The owner's brief and CLAUDE.md's design constitution are in violent agreement, so my job here is not to invent a language — it's to **affirm it, sharpen it, and name the one place the brief and the constitution must be reconciled.**
-
-## 3.1 The core direction: "Forensic editorial," not "trading terminal"
-
-The owner referenced Bloomberg's *black terminal*. **I recommend explicitly resisting that cliché.** SentinelIQ's product is *judgment rendered as a document* — "can this company be trusted?" — not a stream of real-time ticks. CLAUDE.md's **warm off-white canvas (#F6F4EF), navy, and serif/mono pairing** already points somewhere better and rarer: the world of the **Financial Times long-read, The Economist, a top-tier audit report, a private-bank dossier.** That warm, printed, editorial register reads as *old-money institutional* and *considered* — which is exactly the trust signal a forensic product wants. **It is more distinctive than another dark dashboard, and it is already half-built. Lean all the way in.**
-
-> **The one reconciliation the owner must rule on:** CLAUDE.md's constitution says **"No dark mode."** The Bloomberg reference implies dark. These conflict. **My recommendation: stay light/warm** — it's the stronger, more differentiated choice and it's already the constitution. *If* a dark "terminal" theme is genuinely wanted later, treat it as a **deliberate constitutional amendment**, not a default — and even then, a *warm dark* (ink-on-charcoal, not neon-on-black). Until the owner says otherwise, Sonnet builds light only.
-
-## 3.2 The system, element by element (all consistent with CLAUDE.md)
-
-- **Typography.** Keep Playfair (hero serif) / Inter (UI) / IBM Plex Mono (**all** numbers — already enforced via tabular-nums in `globals.css`). *Add:* a documented **type scale** (it's the one foundation missing from `globals.css`), generous line-height for report prose, and strict tabular figures in every data column so numbers align vertically like a real financial table.
-- **Color.** Affirm the warm palette and the **solid (never gradient) risk colors** — risk is categorical, and a glowing gauge would cheapen it. *Add:* a **muted, desaturated data-viz palette** derived from the risk colors + navy (FT-style, never neon), exposed as **JS-accessible tokens** (charts currently can't read Tailwind classes — see §3.3).
-- **Spacing & density.** Resolve the one real tension: the editorial warmth that's perfect for the marketing page and the *report* is too airy for an analyst's *data tables*. **Reports breathe; data tables are dense.** Offer a **comfortable/compact density toggle** (Aladdin, Gmail, and Linear all do this) so power users can pack more rows per screen.
-- **Tables.** This is where institutional credibility lives. Hairline dividers, no zebra (per constitution), right-aligned mono numerals, sortable headers, sticky header row, optional sparkline column. Build **one real `DataTable` primitive** and use it everywhere.
-- **Charts.** FT-quality: muted fills, hairline gridlines, mono axis labels, restrained annotation, **no** 3D/glow/scroll-animation. The only motion is the existing 700ms gauge arc draw. Build **one `ChartFrame` wrapper** that enforces the theme so no page hand-rolls Chart.js again.
-- **Navigation.** Text-only (per constitution) — affirmed. *Add* the single highest-leverage power-user feature: a **⌘K command palette** (jump to company, switch tab, run analysis) — pure Bloomberg-function-key / Palantir / Linear DNA, and it violates none of the constitution's prohibitions.
-- **Forms / modals / interactions.** Restrained, fast, no bounce/spring, skeletons-not-spinners, "..." button loading — all per constitution. Build the three missing primitives (`Input`, `Modal`, `Tooltip`) to spec in Phase 1.
-
-## 3.3 One concrete technical UI debt to fix early
-
-`globals.css` defines timing/font/print tokens but **the color palette lives only in Tailwind classes** — so Chart.js (which needs raw hex in JS) currently can't share the design tokens, which is *why* the chart pages hardcode colors inline. Fix in Phase 1 by exposing the palette as CSS variables + a small JS theme object. This single change unblocks consistent, on-brand charts for Phases 2/6/7.
+- **Senior engineer:** impressive bones; I'd extend this codebase happily and refuse to ship narrative as labeled.
+- **Founder:** the core loop demos well on a large-cap; the differentiator is real. The first analyst who spots a Reuters headline labeled "management commentary," or a red 0.0 that's actually a timeout, won't return. Credibility is the product.
+- **Recruiter/evaluator:** senior-grade work; the ADR ledger and renormalization rationale are portfolio-quality. Observability + a live deploy would make it production-grade.
+- **Power user (analyst):** delighted by the gauge, forensic charts, plain-language report, honest narrative partial-states. Frustrated that red flags don't trace to a source, there's no score history (though the DB has it), missing data looks like terrible data, and "narrative consistency" is news sentiment.
+- **PM:** *polished* — design system, overview, financials, report. *Unfinished* — narrative honesty, evidence traceability, history, deploy reliability. *Over-engineered* — 5 LLM calls for a zero-weight mislabeled signal. *Under-engineered* — observability, disclaimers, missing-data UX. *Remove for now* — narrative red flags + "management commentary" framing.
 
 ---
 
-# 4. Design Inspirations (what to emulate, and why it matters)
+## 5. Gap Analysis
 
-| Inspiration | Emulate this | Why it matters for SentinelIQ |
+**Legend:** ✅ Existing · 🟡 Partial · ❌ Missing
+
+| Dimension | Status | Note |
 |---|---|---|
-| **Financial Times / The Economist** | Editorial typography, the warm printed canvas, beautiful *restrained* charts, the dignity of long-form analytical layout | This is the closest aesthetic match to the warm palette and to a *report* product. It's the house style for SentinelIQ's voice. |
-| **BlackRock Aladdin** | Risk-*first* information hierarchy; **risk decomposition** (a headline number that visibly breaks into contributing factors) | Directly models the Overview tab: Integrity Score → its six weighted components → the flags beneath each. Teaches users to *trust by drilling down*. |
-| **Palantir Foundry / Gotham** | Investigation workflow; **drill-down from conclusion to source evidence**; linked entities | The antidote to "AI asserts a flag." Every red flag should trace to the financial line / article that produced it (Phase 9). |
-| **Bloomberg Terminal** | Information **density**, keyboard-first operation, mono numerals, the function-command model | Adopt density + the **⌘K command palette**. *Reject* the black background — take the ergonomics, not the skin. |
-| **Stripe Dashboard / Linear** | Craft bar, ⌘K, keyboard nav, restraint, "built by people who care" polish | The *quality* benchmark for interactions — not the SaaS-gradient look (which the constitution rightly bans). |
-| **Moody's / S&P CapitalIQ research notes** | The **rating + supporting-evidence document** structure | The mental model for the Report tab: a verdict, then the evidence that earns it. |
+| Core loop (ticker→score→report) | ✅ | End-to-end works. |
+| Honest missing-data UX | ❌ | Null → red 0.0 (N-2). |
+| Narrative honesty | 🟡 | Zero-weighted; mislabeled + spurious flags (N-1). |
+| Evidence drill-down (flag→source) | ❌ | Provenance stored, never surfaced. |
+| Score history / trend | ❌ | DB accumulates runs; no endpoint/UI. |
+| Deploy reliability (reaper, `/health`) | ❌ | R-1. |
+| HTTP rate limiting | ❌ | Only business gate. |
+| Observability (structured logs, request IDs, metrics) | ❌ | Bare-string logging. |
+| **Legal disclaimers** | ❌ → resolved by Ruling B | Must ship (Phase 9). |
+| Security (refresh/revocation/RBAC) | 🟡 | MVP-adequate JWT. |
+| Accessibility | 🟡 | Unverified; gauge/bars need ARIA. |
+| Testing | 🟡 | 70 unit/integration; no E2E. |
+| Analytics / telemetry | ❌ | None. |
+| Frontend query cache | 🟡 | Re-fetches per tab. |
+| Docs (`data-sources.md`, `scoring-methodology.md`) | ❌ | ADR-005 #7 mandated; still missing. |
+| Monitoring/alerting | ❌ | None. |
+| Cost controls (Gemini budget) | 🟡 | Per-call fallback only. |
 
-**The throughline:** take **density and keyboard ergonomics** from the terminals, **typography and chart restraint** from the editorial press, **risk-decomposition** from Aladdin, and **evidence drill-down** from Palantir — all rendered in the warm, light, printed register the constitution already mandates.
+**Legal gap (no constitution doc addresses it).** SentinelIQ publishes algorithmic fraud-risk judgments — including LLM prose and governance "red flags" — about named public companies. A hallucinated "auditor resigned amid investigation" rendered as a finding is a **defamation / securities-commentary exposure**, not just a bug. Ruling B's disclaimer is the minimum; evidence traceability (Phase 11) and a "report an error" path complete the mitigation. **User-Ready blocker for any public exposure.**
 
----
-
-# 5. UI Transformation Roadmap
-
-**Principle:** do **not** run a separate "redesign" pass over mock pages — they're being rebuilt anyway. Elevate design **in the same pass that wires the data.** Only the cross-cutting foundations come first.
-
-- **UI Phase 0 — Foundations (rides Dev Phase 1).** Type scale; JS-accessible color/chart tokens; build `Input`/`Modal`/`Tooltip` to spec; build the `DataTable` and `ChartFrame` primitives; bring ToastContext to spec and make it non-dead. *Unblocks everything below.*
-- **UI Phase 1 — The company workspace (rides Dev Phases 2, 6, 7, 8).** Score gauge + **risk-decomposition** layout, FT-quality forensic charts, red-flag presentation, editorial report typography. The core surface becomes real and beautiful at the same time it becomes real and wired.
-- **UI Phase 2 — The analyst layer (rides Dev Phase 9).** ⌘K command palette, density toggle, breadcrumbs, score-history trend, evidence drill-down.
-- **UI Phase 3 — Portfolio & monitoring (Horizon 2).** Watchlist becomes a sortable **risk dashboard** with score-change indicators and trend sparklines; alerting UI.
-- **UI Phase 4 — Executive & export (rides Dev Phase 8, extends in Horizon 2).** Print-grade report layout (the print stylesheet already exists — build on it), PDF/CSV/XLSX export, shareable report links, eventual portfolio-level executive summary.
-
----
-
-# 6. Development Roadmap for Sonnet — Ordered Phases
-
-Each phase is **small, independently completable, and safe to stop after.** Sonnet executes **one** per "Start new phase," then writes a completion report and stops. The recommended order front-loads the cheapest safety fix and the foundations, then makes the core *honest and verified* before building more UI on top of it, then wires the surfaces, then hardens and ships. Where useful, I map each phase to Sonnet's original labels.
-
-> **Sequencing rule that matters most:** **Phase 3 (honest scoring) must land before Phase 7 (Narrative tab)**, and **Phase 5 (migrations) must land before Phase 11 (deploy).** Everything else is flexible if the owner wants to reorder.
+**User Ready** = an analyst can analyze a real ticker, *trust and verify* what they see, never hit a silently-broken state, at a stable URL, with legal cover. Requires Phases 9 + 10 (+ a deploy).
+**Production Ready** = multi-user-safe, observable, secure, cost-bounded, legally reviewed, built on defensible data. Requires Horizon 2.
 
 ---
 
-### Phase 1 — Shell Hardening: Route Guard + UI Foundations *(was: C2, F2-partial, C3, C5/C6/C7 stubs)*
-- **Objective:** Close the security gap and lay the UI foundations every later phase needs.
-- **Scope:** Add the auth guard to `(app)/layout.tsx` (redirect to `/login` once `!isLoading && !user`, no flash). Build `Input`, `Modal`, `Tooltip` to CLAUDE.md spec. Add a documented **type scale** and **JS-accessible color/chart tokens** to `globals.css`/Tailwind config. Bring `ToastContext` to spec (translateX enter, 3000ms, max-3 — Decision #3) and wire it into 2–3 *existing* real actions (login error, watchlist add/remove) so it stops being dead code. Build the reusable **`DataTable`** and **`ChartFrame`** primitives (empty-but-correct shells are fine if no page consumes them yet).
-- **Expected files:** `frontend/app/(app)/layout.tsx`, `frontend/components/ui/{Input,Modal,Tooltip}.tsx`, `frontend/app/globals.css`, `tailwind.config.*`, `frontend/contexts/ToastContext.tsx`, new `DataTable`/`ChartFrame` components, callsites in watchlist/login.
-- **Risks:** Low. Only real trap: don't redirect before `useAuth`'s initial `getMe()` resolves (loading-flash).
-- **Dependencies:** None.
-- **Success criteria:** Unauthenticated access to any `/(app)` route redirects to `/login`; the three primitives + DataTable + ChartFrame render in the design-system page; toasts fire on watchlist add/remove and match the spec; `next build` clean.
+## 6. Design Direction (unchanged from v1 — still binding)
 
-### Phase 2 — Wire the Company Overview Tab *(was: D2)*
-- **Objective:** First real, end-to-end view of the core USP — and the first time anyone *sees* the actual scores.
-- **Scope:** Replace all hardcoded literals in `company/[ticker]/page.tsx` with `useCompanyData().analysis` (`AnalysisResultWithFlags`): six `*_score` fields → component cards in a **risk-decomposition** layout, `integrity_score` → gauge, `red_flags` → timeline/items. Design the honest **"not yet analyzed"** empty state (CTA → Run Analysis). Surface a small **data-completeness/confidence** indicator if `module_details` exposes period counts.
-- **Expected files:** `frontend/app/(app)/company/[ticker]/page.tsx`; minor additions to `IntegrityGauge`/`ScoreCard` for the empty state.
-- **Risks:** Low–Medium — purely read-only consumption of already-typed data; main risk is empty-state polish.
-- **Dependencies:** None (Phase 1 primitives help but aren't required).
-- **Success criteria:** A real analysis renders real scores/flags; an un-analyzed company shows a clean CTA state; zero hardcoded analysis values remain.
+Recorded compactly so it isn't lost; full rationale in ADR-002/003 and v1 history.
 
-### Phase 3 — Honest, Reproducible Scoring Pipeline *(was: E1, expanded — fixes C-1/C-2/C-3)*
-- **Objective:** Make the Integrity Score *honest* (no constant dilution), *resilient* (no stage discards completed work), and *reproducible* (deterministic + auditable). **This is the most important backend phase.**
-- **Scope:**
-  1. **Refactor `analysis_worker.py` to a uniform stage loop** so per-stage failure is isolated by the orchestrator and Stage 7 always runs (kills C-2 structurally).
-  2. **Separate the news fetch from persistence** in Stage 6 — news gets its own neutral-50 fallback; saving scores is a near-infallible step.
-  3. **Stage 5:** feed `ConsistencyEngine` real multi-statement input derived from existing `news_text` (Decision #2) so narrative actually varies.
-  4. **`fraud_scorer.py`:** when a module lacks a real signal, **renormalize weights across available modules** instead of blending in 50; **temporarily drop narrative from the weighting** until it carries real information. **Update CLAUDE.md** to document this amended scoring rule.
-  5. **`gemini_client.py`:** `temperature=0` + add 429 backoff; **persist prompt + model id + raw response into `module_details`** for reproducibility/audit.
-- **Expected files:** `backend/app/tasks/analysis_worker.py`, `backend/app/core/scoring/fraud_scorer.py`, `backend/app/core/narrative/consistency_engine.py`, `backend/app/core/ai/gemini_client.py`, `CLAUDE.md`.
-- **Risks:** Medium — touches core scoring with **no test net yet** (that's Phase 4). Manually compare before/after scores on 2–3 real tickers; expect scores to *move* (that's the point).
-- **Dependencies:** Should land **before Phase 7**. Pairs naturally with Phase 4.
-- **Success criteria:** Forcing a news-fetch error still produces a saved report with real forensic scores; `narrative_score` varies across companies; a low-data company is scored only on available modules; re-running the same company yields the *same* governance/narrative scores; `module_details` contains the input + AI provenance.
-
-### Phase 4 — Forensic Test Harness + Backtests + CI *(was: E7/F3, elevated)*
-- **Objective:** Put a credibility safety net under the one thing the product cannot get wrong.
-- **Scope:** Real `pytest` suite for the four forensic modules + `fraud_scorer` (deterministic known-input→known-score cases straight from CLAUDE.md's formulas); a pipeline integration test with mocked yfinance/Gemini/RSS; at least one **historical backtest** (`backtest_wirecard.py` / `backtest_enron.py`) asserting the engine flags a known fraud as HIGH/SEVERE; `conftest.py` + fixtures; a **GitHub Actions CI** workflow running the suite on push.
-- **Expected files:** `backend/tests/unit/*`, `backend/tests/integration/*`, `backend/tests/conftest.py`, `scripts/backtest_*.py`, `.github/workflows/ci.yml`.
-- **Risks:** Low (additive). *Best case:* a backtest reveals the engine *doesn't* flag Wirecard well — an enormously valuable finding that justifies the whole phase.
-- **Dependencies:** Best immediately after Phase 3 (lock in corrected behavior).
-- **Success criteria:** `pytest` runs >0 tests and passes; CI green on push; the Wirecard/Enron backtest yields HIGH/SEVERE (or the gap is documented as a known engine limitation).
-
-### Phase 5 — Data Foundation: `AnalysisRun` + Alembic Baseline + Error Envelope *(was: E2 + E3 — fixes C-4/C-6)*
-- **Objective:** Establish the canonical schema and the metering/audit layer monetization and compliance require.
-- **Scope:** Add `AnalysisRun(id, user_id, company_id, analysis_result_id, run_at)` (Decision #1); `AnalysisResult` stays company-scoped. Rewrite the free-tier count to query `AnalysisRun` by user+month; log a run even on a cache hit (meter without recompute). Add a **global FastAPI exception handler** emitting `{"error":{"code","message"}}` everywhere (fixes the in-file inconsistency: `routes/analysis.py` uses the envelope at lines 49/56 but plain strings at 75/102/112). Add Pydantic schemas for `module_details` and `NarrativeSnapshot`. Generate the **Alembic baseline** (all models + `AnalysisRun`); `stamp` the dev DB; retire `create_all` in prod.
-- **Expected files:** `backend/app/models/analysis_run.py` (+ schema), `backend/app/api/v1/routes/analysis.py`, `backend/app/main.py` (handler + `create_all` guard), `backend/alembic/versions/0001_baseline.py`, `backend/app/schemas/*`.
-- **Risks:** Medium — first migration against a `create_all` DB; rehearse on a disposable local Postgres.
-- **Dependencies:** Decision #1 (made). **Must precede Phase 11.**
-- **Success criteria:** `alembic upgrade head` builds the full schema on a clean DB; quota counts correctly per user/month; every error response shares one shape.
-
-### Phase 6 — Wire Financials Tab + Forensic Charts *(was: D3)*
-- **Objective:** Real forensic charts, built once as reusable FT-quality components.
-- **Scope:** Build `RevenueQualityChart`, `CashFlowChart`, `DebtTrendChart` on top of Phase 1's `ChartFrame`; rewrite `financials/page.tsx` to consume `module_details.{revenue,cashflow,debt}`; handle short/empty history gracefully (no faking a 12-quarter series from 2 points).
-- **Expected files:** `frontend/components/charts/{RevenueQualityChart,CashFlowChart,DebtTrendChart}.tsx`, `frontend/app/(app)/company/[ticker]/financials/page.tsx`.
-- **Risks:** Medium — first real use of nested point-arrays; edge cases on thin history.
-- **Dependencies:** Phase 1 (`ChartFrame`, tokens); pattern from Phase 2.
-- **Success criteria:** Real divergence/accrual/debt series render; charts match the muted FT spec; no inline Chart.js remains.
-
-### Phase 7 — Wire Governance + Narrative Tabs *(was: D4 + D5)*
-- **Objective:** Complete the AI-driven tabs against now-*honest* backend data.
-- **Scope:** Build `GovernanceChecklist`; wire `governance/page.tsx` to `red_flags` filtered by `flag_type==="governance"` with a sensible event→checklist mapping. Wire `narrative/page.tsx` to `module_details.narrative.snapshots` with an honest partial state — now meaningful because Phase 3 makes narrative vary. Build `RiskRadar` if used.
-- **Expected files:** `frontend/components/modules/GovernanceChecklist.tsx`, `frontend/components/charts/RiskRadar.tsx`, the governance + narrative pages.
-- **Risks:** Medium — checklist mapping is a small product decision; narrative depth still news-bounded until Horizon 2 transcripts.
-- **Dependencies:** **Phase 3 mandatory.**
-- **Success criteria:** Governance shows real events; narrative shows real, varying snapshots/score; both have honest empty states.
-
-### Phase 8 — Wire Report Tab + Markdown + Export *(was: D6 + export)*
-- **Objective:** Render the real AI report and make it *extractable* — institutional users demand export.
-- **Scope:** Add `react-markdown` (first new frontend dep — call it out); build `ReportSection`; wire `report/page.tsx` to `getReport()` → `Report.content` with editorial typography that obeys the constitution. Implement real **PDF export** (lean on the existing print stylesheet first) and **CSV/XLSX export** of the forensic series. Make "Add to Watchlist" work with toast feedback.
-- **Expected files:** `frontend/app/(app)/company/[ticker]/report/page.tsx`, `frontend/components/modules/ReportSection.tsx`, an export util, `package.json`.
-- **Risks:** Medium — markdown must render within strict typography rules; PDF fidelity.
-- **Dependencies:** None hard; richer after Phases 2/3.
-- **Success criteria:** Real report renders to spec; PDF/CSV export produce correct files; watchlist-add works.
-
-### Phase 9 — Analyst Workflow Layer: ⌘K + Score History + Evidence Drill-down *(new — the institutional leap)*
-- **Objective:** Turn a one-shot scorer into an analyst's tool, using data that mostly already exists.
-- **Scope:** A **⌘K command palette** (search companies, jump to tabs, run analysis). Surface **score-over-time** (the DB already accumulates `AnalysisResult` rows — add `GET /analysis/company/{ticker}/history` + a trend chart). Make red flags **drill down to their triggering financial line / news item** (provenance captured in Phase 3).
-- **Expected files:** new `CommandPalette` component, `backend/app/api/v1/routes/analysis.py` (history endpoint), drill-down wiring in overview/financials.
-- **Risks:** Medium — new endpoint + new interaction surface.
-- **Dependencies:** Phase 3 (provenance), Phase 5 (clean data layer).
-- **Success criteria:** ⌘K navigates anywhere; a company shows its integrity-score trend across runs; clicking a red flag reveals its source data.
-
-### Phase 10 — Settings Actions + Auth-Page Honesty + Dead-Code Sweep *(was: F1 + F3 + G1)*
-- **Objective:** Finish the account surface honestly and shed the dead weight.
-- **Scope:** Real `PATCH /auth/me` + `POST /auth/change-password`; wire the Settings Account tab (notification prefs as a JSON column **or** an explicit "coming soon"). Redesign forgot-password/verify-email as honest "not yet available" states and **delete the dev-toggle debug buttons** (they must never ship). **Delete** confirmed dead files: `risk_classifier.py`, `weights.py`, `api/v1/deps.py`, `api/middleware/*`, the 8 empty backend stubs (Decision #4), unused `lucide-react`. Fix the cosmetic nits (redundant ternary, `javascript:history.back()`).
-- **Expected files:** backend auth additions; `settings` + auth pages; many small deletions.
-- **Risks:** Low — mostly subtractive + small endpoints. If adding a `User` column, sequence after Phase 5.
-- **Dependencies:** Phase 5 (if adding a column).
-- **Success criteria:** Settings persists name/password; no debug buttons ship; dead files gone; `next build` + backend startup clean.
-
-### Phase 11 — Deployment Dry-Run *(was: H1 — includes the demoted "frontend Dockerfile")*
-- **Objective:** Get SentinelIQ live on Vercel + Render with real migrations and restart-resilience.
-- **Scope:** Add `frontend/Dockerfile` for local docker-compose parity **or** fix compose/README to reflect that Vercel builds Next.js natively (it does — this is why I demoted it from Critical). Deploy backend + Postgres to Render (`alembic upgrade head`), frontend to Vercel; wire env vars. Add a **`/health` endpoint** and a **"stuck analysis" reaper** (mark `running` > ~10 min as `failed`) to survive Render free-tier spin-downs (§1.3). Smoke-test end-to-end on a real ticker.
-- **Expected files:** `frontend/Dockerfile`, optional `render.yaml`/`vercel.json`, `backend/app/main.py` (health + reaper), README fix.
-- **Risks:** Medium — first real external infra. **Confirm with the owner at each external step** (creating accounts, connecting GitHub, setting secrets) per operating rules.
-- **Dependencies:** **Phase 5 mandatory** (never deploy `create_all`-only schema to managed Postgres).
-- **Success criteria:** Public URLs serve the app; a real analysis runs end-to-end in prod; restarting the backend mid-analysis does not leave a permanently-`running` row.
+- **"Forensic editorial," not "trading terminal."** Warm off-white canvas (#F6F4EF), navy, serif/mono pairing — the register of an FT long-read / audit report / private-bank dossier. **Light mode only** (ADR-003); any dark theme would be a deliberate constitutional amendment, and even then *warm dark*, never neon.
+- **Risk-decomposition (Aladdin):** headline score visibly breaks into its weighted components, which break into flags. Already the Overview layout.
+- **Evidence drill-down (Palantir):** every flag traces to its source — the Phase 11 leap.
+- **Density + ⌘K (Bloomberg ergonomics, not its skin):** a comfortable/compact toggle and a command palette (Phase 11).
+- **FT-quality charts:** muted fills, hairline gridlines, mono axis labels, no glow/3D/scroll-animation; the only motion is the 700ms gauge arc. Enforced via the existing `ChartFrame`.
+- **Tables:** hairline dividers, no zebra, right-aligned mono numerals, via the existing `DataTable`.
 
 ---
 
-## Horizon 2 — Post-MVP Product Bets (not yet numbered phases; owner decides)
+## 7. Revised Roadmap
 
-These are the moves that take SentinelIQ from "working product" to "institutional platform." Listed so they're on the record, **not** scheduled.
+**Resequencing rationale.** v1's Phase 9 (Analyst Workflow Layer) assumed the displays were honest and the backend reliable. This review shows neither holds. Building ⌘K and drill-down on dishonest displays is building on sand. So honesty precedes reliability precedes workflow.
 
-- **Portfolio monitoring + alerting** (nightly batch re-scoring, score-change alerts) — the flagship Pro/Enterprise capability; resurrects the intent behind `data_refresh.py`.
-- **Sector-relative benchmarking** — scores judged against sector norms, not just absolute thresholds.
-- **Real narrative depth** — the transcript/SEC pipeline (`transcript_fetcher`, `statement_extractor`, `sentiment_scorer`, `sec_scraper`) Phase 3 deliberately defers.
-- **Point-in-time / filing-grade data source** — the credibility ceiling in §1.4; likely a paid data dependency, in tension with $0/month.
-- **Investigations / case files / collaboration** — saved dossiers, analyst notes, sharing, comments.
-- **Enterprise auth** — refresh tokens, RBAC, SSO/SAML, MFA, auth audit logging (building on Phase 5's `AnalysisRun` audit foundation).
-- **Job queue** — replace in-process `BackgroundTasks` when scale or reliability demands it (breaks $0/month — a deliberate cost decision).
-
----
-
-# 7. Ordered Phase List (the execution sequence)
+**Old → new mapping:** v1 Phase 9 (workflow) → **new Phase 11**; v1 Phase 10 (cleanup) → **new Phase 12**; v1 Phase 11 (deploy) → folded into **new Phase 10**. **New Phase 9 (Integrity & Honesty Hardening) is inserted ahead of everything as the next phase to execute.**
 
 | Order | Phase | Track | Hard dependency |
 |---|---|---|---|
-| 1 | Shell Hardening (route guard + UI foundations) | Frontend/Safety | — |
-| 2 | Wire Company Overview Tab | Frontend | — |
-| 3 | **Honest, Reproducible Scoring Pipeline** | Backend/Core | — *(before Phase 7)* |
-| 4 | Forensic Test Harness + Backtests + CI | Backend/Quality | after Phase 3 |
-| 5 | Data Foundation: `AnalysisRun` + Alembic + error envelope | Backend/Data | *(before Phase 11)* |
-| 6 | Wire Financials Tab + Forensic Charts | Frontend | Phase 1 |
-| 7 | Wire Governance + Narrative Tabs | Frontend | **Phase 3** |
-| 8 | Wire Report Tab + Markdown + Export | Frontend | — |
-| 9 | Analyst Layer: ⌘K + Score History + Drill-down | Full-stack | Phases 3, 5 |
-| 10 | Settings Actions + Auth Honesty + Dead-Code Sweep | Full-stack | Phase 5 (if new column) |
-| 11 | Deployment Dry-Run | Infra | **Phase 5** |
+| **9** | **Integrity & Honesty Hardening** | Full-stack / Credibility | — *(next to execute)* |
+| 10 | Reliability & Deployment Readiness | Backend / Infra | Phase 5 ✅ |
+| 11 | Analyst Workflow Layer (⌘K + History + Drill-down) | Full-stack | Phases 9, 5 ✅ |
+| 12 | Cleanup & Settings/Auth Honesty | Full-stack | Phase 5 ✅ |
+| H1–H5 | Horizon 2 (owner-scheduled) | — | — |
 
-**If the owner wants the shortest path to a *credible demo*:** Phases **1 → 2 → 3 → 4** alone deliver a secured shell, a real Overview screen, an *honest and reproducible* score, and a *verified* engine — the four things that make the product defensible. Everything after is breadth on a sound foundation.
+### Phase 9 — Integrity & Honesty Hardening *(NEXT)*
+- **Goal:** every number and label is either true or honestly marked unavailable; legal cover present.
+- **Features:** null-vs-zero UI fix (N-2); narrative relabel + red-flag suppression (N-1); empty-governance fix (N-3); surface confidence (M-2); write `docs/data-sources.md` + `docs/scoring-methodology.md`; persistent disclaimer (Ruling B); ratify ADR-013/014.
+- **Dependencies:** none. **Do not touch score math.**
+- **Risks:** narrative relabel spans Phase 7 UI + the report prompt; keep `fraud_scorer` untouched.
+- **Success criteria:** a failed module shows "—/Unavailable," never red 0.0; nothing labels news as "management commentary"; no narrative red flags persist; empty governance ≠ 100; `module_details.confidence` visible; disclaimer on every analysis view; both docs exist; ADR-013/014 recorded.
+
+### Phase 10 — Reliability & Deployment Readiness
+- **Goal:** no stuck analyses; survives a free-tier restart; live at a URL; quota is fair.
+- **Features:** apply Ruling A (cache hits don't consume quota); `/health`; stuck-analysis reaper introducing a terminal `"error"` status (not the retired `"failed"`) with explicit UI handling; structured logging + request/analysis correlation IDs; Vercel + Render deploy dry-run.
+- **Dependencies:** Phase 5 ✅.
+- **Risks:** reintroducing a terminal non-`complete` status — do it deliberately as `"error"`, not by reviving dead `"failed"` paths. External deploy steps need owner confirmation (ADR-012).
+- **Success criteria:** killing the worker mid-run yields a user-visible "interrupted — retry" within N minutes; `/health` 200; cached re-opens don't decrement quota; app reachable at a stable URL.
+
+### Phase 11 — Analyst Workflow Layer *(was v1 Phase 9)*
+- **Goal:** turn a one-shot scorer into an analyst tool.
+- **Features:** ⌘K command palette; `GET /analysis/company/{ticker}/history` + score-trend chart (data already in DB); **evidence drill-down** (now meaningful — Phase 9 made provenance honest, Phase 6 exposes the forensic series); deepen provenance to the true raw response (M-1); governance JSON schema validation (M-5); frontend query cache.
+- **Dependencies:** Phases 9, 5.
+- **Success criteria:** every flag traces to a source; history renders for any company with ≥2 runs; ⌘K navigates; cross-tab nav reuses one fetch.
+
+### Phase 12 — Cleanup & Settings/Auth Honesty *(was v1 Phase 10)*
+- **Goal:** remove dead weight; honest stub pages.
+- **Features:** delete root 0-byte backtests, dead `status=="failed"` branches, unused `RiskRadar.tsx`; consolidate the three Google-News fetches; honest "not yet available" auth/settings stubs (MR-3); ARIA pass on gauge/bars; consider `google-genai` SDK + 2.x Flash migration.
+- **Note:** low-risk, subtractive; can be folded opportunistically into 9–11.
+
+### Horizon 2 (owner-scheduled, re-ranked)
+- **H1 — Narrative done right (transcript/SEC pipeline).** The only way to make narrative honest *by construction*: ingest earnings-call transcripts / SEC filings, then re-introduce narrative at 0.10 weight (ADR-006 step 2). Justifies the LLM spend. **Raised in priority** — it's what removes the "experimental" label.
+- **H2 — Point-in-time / filing-grade data.** Deepest credibility lever; yfinance restated data can hide the fraud signal. Likely a paid dependency (tension with $0/month).
+- **H3 — Concurrency & cost.** Replace in-process `BackgroundTasks` with a job queue (breaks $0/month — owner cost ruling); global Gemini budget guard; adopt Redis or formally enforce single-instance (ADR-008).
+- **H4 — Monetization surface.** Portfolio monitoring + alerting (resurrect `data_refresh.py`); sector-relative benchmarking. The paid tier.
+- **H5 — Enterprise hardening.** Refresh tokens / revocation / RBAC / SSO / MFA / audit logging (on `AnalysisRun`); uptime + error-rate monitoring; product analytics; E2E tests; accessibility/SEO audits; formal legal review.
+
+---
+
+## 8. Instructions for Sonnet (per phase, ordered by priority)
+
+> Execute only the authorized phase. Smallest sensible commits, root-cause fixes, completion report, then STOP. Commit identity is owner-only (no Co-Authored-By trailer, ever). Push after the phase (standing instruction).
+
+### Phase 9 — Integrity & Honesty Hardening
+1. **Null-as-zero (highest impact, smallest change).** Stop coercing `analysis[key] ?? 0` in the component-score rows and progress bars (`frontend/app/(app)/company/[ticker]/page.tsx:180`). When a score is `null`, render a muted "—" labeled "Unavailable" with no risk-colored bar (use border/skeleton tint). Apply the same rule to the `ModuleScoreCard` grid (`page.tsx:228`) and the financials/governance/narrative tabs. A `null` score must be visually distinct from a low score.
+2. **Suppress narrative red flags + relabel.** In `_stage_narrative` (`backend/app/tasks/analysis_worker.py:136`), keep computing/persisting snapshots and the (zero-weighted) narrative score, but **do not persist `cont_flags` as `RedFlag` records** until a real transcript source exists. Relabel the module "News Tone (experimental)" everywhere user-facing (`page.tsx:32/57`, the narrative tab, `report_generator.py` framing). Snapshots' `source` is already "News"; make the surrounding labels match that truth.
+3. **Empty governance ≠ 100.** In `GovernanceScorer.analyze` (`backend/app/core/governance/governance_scorer.py:20`), when `news_text` is empty/below a documented minimum length, return `50.0` + a low-confidence marker rather than `100.0`. Document the threshold.
+4. **Surface confidence.** Replace the hand-rolled `periodCount` heuristic (`page.tsx:73`) with `analysis.module_details.confidence`; render a "Confidence: Low/Medium/High" chip near the gauge with a tooltip (CLAUDE.md tier definition). Keep the period sentence as secondary context.
+5. **Write the mandated docs (ADR-005 #7):** `docs/data-sources.md` (yfinance = restated, *not* as-filed point-in-time; news = Google News RSS; state the fraud-forensics limitation explicitly) and `docs/scoring-methodology.md` (weight vector, renormalization rule, each module formula, narrative exclusion).
+6. **Disclaimer (Ruling B):** add a persistent, constitution-compliant (no color-blocking) footer/line on every analysis view: **"Algorithmic screening signal only. Not investment advice and not an accusation."**
+7. **Ratify ADRs:** add ADR-013 (cache-hit metering, Ruling A) and ADR-014 (disclaimer, Ruling B) to `ARCHITECTURAL_DECISIONS.md`.
+8. Completion report; commit; push.
+
+### Phase 10 — Reliability & Deployment Readiness
+1. **Ruling A:** keep writing the `AnalysisRun` on a cache hit but exclude it from quota — add a boolean (e.g. `cache_hit`/`counted`) to `AnalysisRun` (small Alembic migration) and filter it out of `_free_tier_usage_query` (`backend/app/api/v1/routes/analysis.py:23`). Only fresh computes decrement the 5/month.
+2. **`/health`** (DB connectivity), no auth.
+3. **Reaper + terminal `"error"`:** mark any `running:` `AnalysisResult` older than ~10 min as `"error"`; update `useAnalysis` + the overview/empty states to show a real "analysis interrupted — retry" terminal state. Do not revive the dead `"failed"` paths — introduce `"error"` cleanly.
+4. **Structured logging:** JSON logs + a correlation ID threaded through `run_full_analysis`'s per-stage logs.
+5. **Deploy dry-run** to Vercel + Render (`alembic upgrade head`); **stop and confirm with the owner before any external/account-touching step** (ADR-012).
+
+### Phase 11 — Analyst Workflow Layer
+1. `GET /analysis/company/{ticker}/history` + a trend chart on `ChartFrame`.
+2. Evidence drill-down: surface stored governance/narrative provenance and forensic source rows behind each red flag (read-only).
+3. Deepen provenance to store the true raw API response (not just `.text`) (M-1); add governance JSON schema validation (M-5).
+4. ⌘K command palette; frontend query cache so cross-tab nav reuses one fetch.
+
+### Phase 12 — Cleanup
+Delete root 0-byte backtests, dead `status=="failed"` branches (`analysis.py:103`, `page.tsx:149`), unused `RiskRadar.tsx`; consolidate the three Google-News fetches + remove the duplicate `import time`; honest auth/settings stubs (MR-3); ARIA pass; evaluate `google-genai` + 2.x Flash.
+
+---
+
+## 9. Prioritized Recommendations
+
+1. **Immediate next step:** Phase 9 in full. Null-as-zero and the narrative relabel are an afternoon each and each removes a credibility landmine; ship the disclaimer with them.
+2. **High-impact:** reaper + `/health` (Phase 10) — without it the first deploy generates infinite-spinner reports; evidence drill-down (Phase 11) — converts "demo" into "tool I trust."
+3. **Medium:** confidence surfacing; structured logging + request IDs; query cache; deeper provenance; governance schema validation.
+4. **Nice to have:** ⌘K; score-history trend; SEO/accessibility audit; `google-genai` + 2.x Flash.
+5. **Avoid for now:** no more investment in news-derived narrative (no extra LLM calls, no UI elevation — freeze behind "experimental" until H1); no Redis/queue until the cost ruling (ADR-008); do not build new analyst features on dishonest displays — Phase 9 precedes Phase 11.
+6. **Tech debt:** versioned Pydantic schema + `schema_version` for `module_details` before it grows; make the `financial=(revenue+debt)/2` blend + stage list config, not hardcode, when a 6th module appears.
 
 ---
 
 ## Working Agreement
 
-I (Opus) review, critique, prioritize, and design. Sonnet implements, tests, refactors, and deploys. On **"Start new phase,"** Sonnet reads this roadmap, executes **only the next phase** (default order above, or as the owner amends), completes it fully, writes a completion report, and **stops**. Any change to CLAUDE.md's constitution (e.g., the Phase 3 scoring amendment, or a future dark theme) is made **explicitly and with reasons**, never silently.
+Opus reviews, critiques, prioritizes, designs. Sonnet implements, tests, refactors, deploys. On **"Start new phase,"** Sonnet executes **only the next phase** (Phase 9 next, per §7), completes it, writes a completion report, and stops. CLAUDE.md / ADR amendments are explicit and dated, never silent.
 
-**Recommended first phase to authorize: Phase 1 (Shell Hardening).** It closes the live security gap, is low-risk, and unblocks every UI phase that follows.
+**Recommended next phase to authorize: Phase 9 (Integrity & Honesty Hardening).**
 
-*End of architectural review. Awaiting the owner's go-ahead to authorize a phase.*
+*End of v2 architectural review. Authoritative for future phases. Awaiting the owner's go-ahead.*
