@@ -134,6 +134,34 @@ Amendments are explicit and dated — never silent behavioral changes inside a f
 > with no matching `module_details` row (older analyses, or pre-Phase-3 analyses with no
 > `module_details` at all) render `evidence=[]` — no toggle, identical to the prior UI.
 
+> **Phase 11 Step 3 amendment (2026-06-17):** M-1 (deep provenance) and M-5 (governance
+> schema validation).
+>
+> **M-1 — Deep provenance.** `generate_content_with_provenance` in
+> `backend/app/core/ai/gemini_client.py` previously set `raw_response = text` (the
+> extracted `.text` string), losing `finish_reason`, safety ratings, and token counts.
+> It now calls `model.generate_content(...)` directly via `_call_with_backoff`, captures
+> the full response object, and passes it to `_extract_provenance_fields(response)` —
+> a new defensive helper that returns `{"finish_reason", "safety_ratings",
+> "prompt_token_count", "candidates_token_count"}` from the response or `{}` on any
+> attribute error. `generate_json_with_provenance` is simplified to delegate through
+> `generate_content_with_provenance` (was an independent path; now shares the same
+> response-capture logic). `GenerationResult.raw_response` type changed from
+> `str | None` to `dict | None`; `frontend/types/analysis.ts`'s
+> `GovernanceProvenance.raw_response` updated to match (`GeminiRawResponse | null` —
+> a new named interface with the four fields above). Nothing in the frontend reads
+> `raw_response` beyond type checking, so no UI change.
+>
+> **M-5 — Governance JSON schema validation.** `GovernanceEvent` (Pydantic `BaseModel`)
+> is now the validated gate for every governance event before scoring:
+> `severity` is validated against `{"moderate","high","severe"}` (unknown values
+> normalize to `"moderate"` with a warning — parseable-but-malformed responses still
+> produce a deduction rather than a falsely clean score); `description` defaults to
+> `"Governance event detected"` if empty. Non-dict events in the `events` list are
+> skipped with a `logger.warning`. The scoring deduction table moves from inline
+> `if/elif` branches to `_SEVERITY_DEDUCTIONS = {"moderate": 15, "high": 25,
+> "severe": 35}`.
+
 ---
 
 ## Git Commit Identity — MANDATORY

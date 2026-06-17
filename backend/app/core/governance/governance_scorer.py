@@ -1,12 +1,52 @@
+import logging
 from pathlib import Path
+from typing import Optional
+
+from pydantic import BaseModel, field_validator
+
 from app.core.ai.gemini_client import generate_json_with_provenance
 from app.models.red_flag import RedFlag
+
+logger = logging.getLogger(__name__)
 
 # Below this many characters, news_text is shorter than a single typical
 # headline — not enough for Gemini to meaningfully evaluate any of the six
 # governance event types. Treated as "no signal" (neutral 50, low confidence)
 # without spending a Gemini call. See CLAUDE.md Phase 9 amendment.
 MIN_NEWS_TEXT_LENGTH = 40
+
+_VALID_SEVERITIES = {"moderate", "high", "severe"}
+_SEVERITY_DEDUCTIONS = {"moderate": 15, "high": 25, "severe": 35}
+
+
+class GovernanceEvent(BaseModel):
+    """Validated shape for a single governance event returned by Gemini (M-5).
+
+    Unknown severities are normalized to "moderate" with a warning rather than
+    silently skipped — a parseable-but-malformed response should still produce
+    a deduction rather than a falsely clean score.
+    """
+
+    severity: str
+    description: str
+    event_type: Optional[str] = None
+    event_date_approx: Optional[str] = None
+
+    @field_validator("severity", mode="before")
+    @classmethod
+    def normalize_severity(cls, v) -> str:
+        val = str(v).lower().strip()
+        if val in _VALID_SEVERITIES:
+            return val
+        logger.warning(f"GovernanceScorer: unknown severity {v!r}, defaulting to 'moderate'")
+        return "moderate"
+
+    @field_validator("description", mode="before")
+    @classmethod
+    def ensure_description(cls, v) -> str:
+        if not v or not str(v).strip():
+            return "Governance event detected"
+        return str(v)
 
 
 class GovernanceScorer:
@@ -43,21 +83,22 @@ class GovernanceScorer:
         score = 100.0
         flags = []
 
-        for event in events:
-            severity = event.get("severity", "moderate")
-            if severity == "moderate":
-                score -= 15
-            elif severity == "high":
-                score -= 25
-            elif severity == "severe":
-                score -= 35
+        for raw_event in events:
+            if not isinstance(raw_event, dict):
+                logger.warning(f"GovernanceScorer: skipping non-dict event: {raw_event!r}")
+                continue
+            try:
+                event = GovernanceEvent.model_validate(raw_event)
+            except Exception as e:
+                logger.warning(f"GovernanceScorer: invalid event schema, skipping: {e}")
+                continue
 
-            event_date_approx = event.get("event_date_approx")
+            score -= _SEVERITY_DEDUCTIONS[event.severity]
             flags.append({
                 "flag_type": "governance",
-                "severity": severity,
-                "description": event.get("description", "Governance event detected"),
-                "period": event_date_approx[:20] if event_date_approx else None
+                "severity": event.severity,
+                "description": event.description,
+                "period": event.event_date_approx[:20] if event.event_date_approx else None,
             })
 
         score = max(0.0, min(100.0, score))

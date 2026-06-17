@@ -22,7 +22,42 @@ class GenerationResult(TypedDict):
     text: str | None
     prompt: str
     model_id: str
-    raw_response: str | None
+    raw_response: dict | None
+
+
+def _extract_provenance_fields(response) -> dict:
+    """Extract audit fields from a raw Gemini response object.
+
+    Captures finish_reason, safety_ratings, and token counts — the fields
+    an audit needs when a score looks wrong (M-1).  Defensive: any attribute
+    miss or enum type mismatch returns an empty dict rather than raising.
+    """
+    try:
+        candidates = getattr(response, "candidates", None) or []
+        candidate = candidates[0] if candidates else None
+
+        finish_reason = None
+        safety_ratings = []
+        if candidate is not None:
+            fr = getattr(candidate, "finish_reason", None)
+            finish_reason = fr.name if hasattr(fr, "name") else (str(fr) if fr is not None else None)
+            for r in getattr(candidate, "safety_ratings", []) or []:
+                cat = getattr(r, "category", None)
+                prob = getattr(r, "probability", None)
+                safety_ratings.append({
+                    "category": cat.name if hasattr(cat, "name") else str(cat),
+                    "probability": prob.name if hasattr(prob, "name") else str(prob),
+                })
+
+        usage = getattr(response, "usage_metadata", None)
+        return {
+            "finish_reason": finish_reason,
+            "safety_ratings": safety_ratings,
+            "prompt_token_count": getattr(usage, "prompt_token_count", None) if usage else None,
+            "candidates_token_count": getattr(usage, "candidates_token_count", None) if usage else None,
+        }
+    except Exception:
+        return {}
 
 
 def _build_config(temperature: float | None) -> dict | None:
@@ -68,12 +103,26 @@ async def generate_content(prompt: str, temperature: float | None = None) -> str
 
 
 async def generate_content_with_provenance(prompt: str, temperature: float = 0.0) -> GenerationResult:
-    text = await generate_content(prompt, temperature=temperature)
+    def _call():
+        config = _build_config(temperature)
+        if config:
+            return model.generate_content(prompt, generation_config=config)
+        return model.generate_content(prompt)
+
+    try:
+        response = await _call_with_backoff(_call)
+        text = response.text
+        raw_response = _extract_provenance_fields(response)
+    except Exception as e:
+        logger.error(f"Gemini API error: {e}")
+        text = None
+        raw_response = None
+
     return {
         "text": text,
         "prompt": prompt,
         "model_id": DEFAULT_MODEL_ID,
-        "raw_response": text,
+        "raw_response": raw_response,
     }
 
 
@@ -103,11 +152,5 @@ async def generate_json(prompt: str, temperature: float = 0.0) -> dict | list | 
 async def generate_json_with_provenance(
     prompt: str, temperature: float = 0.0
 ) -> tuple[dict | list | None, GenerationResult]:
-    text = await generate_content(prompt, temperature=temperature)
-    provenance: GenerationResult = {
-        "text": text,
-        "prompt": prompt,
-        "model_id": DEFAULT_MODEL_ID,
-        "raw_response": text,
-    }
-    return _parse_json(text), provenance
+    provenance = await generate_content_with_provenance(prompt, temperature=temperature)
+    return _parse_json(provenance["text"]), provenance

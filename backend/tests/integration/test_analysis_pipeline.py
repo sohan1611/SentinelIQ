@@ -112,7 +112,16 @@ FINANCIALS = [
     },
 ]
 
-GOV_PROVENANCE = {"model_id": "gemini-1.5-flash", "prompt": "gov-prompt", "raw_response": "gov-raw"}
+GOV_PROVENANCE = {
+    "model_id": "gemini-1.5-flash",
+    "prompt": "gov-prompt",
+    "raw_response": {
+        "finish_reason": "STOP",
+        "safety_ratings": [],
+        "prompt_token_count": 120,
+        "candidates_token_count": 40,
+    },
+}
 GOV_RESULT = (
     75.0,
     [{"flag_type": "governance", "severity": "moderate", "description": "CFO resignation", "period": "2023-01-01"}],

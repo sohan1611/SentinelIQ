@@ -30,7 +30,17 @@ def _module_details():
             ],
         },
         "governance": {
-            "provenance": {"model_id": "gemini-1.5-flash", "prompt": "gov-prompt", "raw_response": "gov-raw", "low_confidence": False},
+            "provenance": {
+                "model_id": "gemini-1.5-flash",
+                "prompt": "gov-prompt",
+                "raw_response": {
+                    "finish_reason": "STOP",
+                    "safety_ratings": [],
+                    "prompt_token_count": 120,
+                    "candidates_token_count": 40,
+                },
+                "low_confidence": False,
+            },
             "low_confidence": False,
         },
     }

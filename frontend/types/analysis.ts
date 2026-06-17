@@ -53,10 +53,17 @@ export interface ToneShift {
   description: string;
 }
 
+export interface GeminiRawResponse {
+  finish_reason: string | null;
+  safety_ratings: Array<{ category: string; probability: string }>;
+  prompt_token_count: number | null;
+  candidates_token_count: number | null;
+}
+
 export interface GovernanceProvenance {
   model_id: string | null;
   prompt: string | null;
-  raw_response: string | null;
+  raw_response: GeminiRawResponse | null;
   low_confidence: boolean;
 }
 
