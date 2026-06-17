@@ -4,15 +4,14 @@ import random
 import logging
 from typing import TypedDict
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-genai.configure(api_key=settings.GEMINI_API_KEY)
-
-DEFAULT_MODEL_ID = "gemini-1.5-flash"
-model = genai.GenerativeModel(DEFAULT_MODEL_ID)
+DEFAULT_MODEL_ID = "gemini-2.0-flash"
+client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
 MAX_RETRIES = 3
 BASE_BACKOFF_SECONDS = 2.0
@@ -60,17 +59,18 @@ def _extract_provenance_fields(response) -> dict:
         return {}
 
 
-def _build_config(temperature: float | None) -> dict | None:
+def _build_config(temperature: float | None) -> types.GenerateContentConfig | None:
     if temperature is None:
         return None
-    return {"temperature": temperature}
+    return types.GenerateContentConfig(temperature=temperature)
 
 
-async def _call_with_backoff(fn):
+async def _call_with_backoff(coro_fn):
+    """coro_fn: async callable that takes no args and returns the response."""
     last_exc: Exception | None = None
     for attempt in range(MAX_RETRIES):
         try:
-            return await asyncio.to_thread(fn)
+            return await coro_fn()
         except Exception as e:
             last_exc = e
             is_429 = (
@@ -89,25 +89,29 @@ async def _call_with_backoff(fn):
 
 
 async def generate_content(prompt: str, temperature: float | None = None) -> str | None:
-    def _call():
-        config = _build_config(temperature)
-        if config:
-            return model.generate_content(prompt, generation_config=config).text
-        return model.generate_content(prompt).text
+    config = _build_config(temperature)
+
+    async def _call():
+        kwargs = {"model": DEFAULT_MODEL_ID, "contents": prompt}
+        if config is not None:
+            kwargs["config"] = config
+        return await client.aio.models.generate_content(**kwargs)
 
     try:
-        return await _call_with_backoff(_call)
+        response = await _call_with_backoff(_call)
+        return response.text
     except Exception as e:
         logger.error(f"Gemini API error: {e}")
         return None
 
 
 async def generate_content_with_provenance(prompt: str, temperature: float = 0.0) -> GenerationResult:
-    def _call():
-        config = _build_config(temperature)
-        if config:
-            return model.generate_content(prompt, generation_config=config)
-        return model.generate_content(prompt)
+    config = _build_config(temperature)
+
+    async def _call():
+        return await client.aio.models.generate_content(
+            model=DEFAULT_MODEL_ID, contents=prompt, config=config
+        )
 
     try:
         response = await _call_with_backoff(_call)
@@ -130,7 +134,6 @@ def _parse_json(text: str | None) -> dict | list | None:
     if not text:
         return None
     try:
-        # Strip markdown json blocks if present
         cleaned = text.strip()
         if cleaned.startswith("```json"):
             cleaned = cleaned[7:]
