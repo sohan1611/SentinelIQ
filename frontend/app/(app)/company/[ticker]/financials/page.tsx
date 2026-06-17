@@ -6,11 +6,11 @@ import { DebtTrendChart } from "@/components/charts/DebtTrendChart";
 import { RevenueQualityChart } from "@/components/charts/RevenueQualityChart";
 import { ModuleScoreBadge } from "@/components/modules/ScoreCard";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { useCompanyData } from "@/lib/hooks/useCompanyData";
+import { useCompanyContext } from "@/contexts/CompanyContext";
 
 export default function FinancialsPage({ params }: { params: { ticker: string } }) {
   const ticker = params.ticker;
-  const { company, analysis, isLoading, error } = useCompanyData(ticker);
+  const { company, analysis, isLoading, error } = useCompanyContext();
 
   if (isLoading) {
     return (

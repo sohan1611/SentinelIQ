@@ -134,6 +134,28 @@ Amendments are explicit and dated — never silent behavioral changes inside a f
 > with no matching `module_details` row (older analyses, or pre-Phase-3 analyses with no
 > `module_details` at all) render `evidence=[]` — no toggle, identical to the prior UI.
 
+> **Phase 11 Step 4 amendment (2026-06-17):** ⌘K command palette + frontend query cache
+> (cross-tab navigation reuses one fetch).
+>
+> **Query cache.** `frontend/contexts/CompanyContext.tsx` is a new React context that
+> holds `{company, analysis, isLoading, error, refetch, analysisStatus, isRunning,
+> analysisError, startAnalysis}`. `company/[ticker]/layout.tsx` calls `useCompanyData`
+> and `useAnalysis` exactly once (as it did before) and wraps `<PageTransition>` with
+> `<CompanyContext.Provider value={{...}}>`. All 5 child tabs (Overview `page.tsx`,
+> `financials/`, `governance/`, `narrative/`, `report/`) now call `useCompanyContext()`
+> instead of their own `useCompanyData(ticker)` calls — eliminating 5 duplicate API
+> fetches and 1 duplicate polling instance. `report/page.tsx`'s `useReport(ticker,
+> !!analysis)` call is unaffected (different endpoint, kept separate).
+>
+> **⌘K command palette.** `frontend/components/layout/CommandPalette.tsx` — triggered by
+> `Cmd+K`/`Ctrl+K` global keydown listener in `frontend/app/(app)/layout.tsx`; shows
+> debounced search via `searchCompanies()` (220ms debounce with `useDebounce`); keyboard
+> navigation (↑/↓ arrow keys, Enter to navigate, Esc to close); static nav items
+> (Dashboard, Search, Watchlist, Settings) when query is empty. Design: FFFFFF card,
+> 1px E3DFD8 border, 8px radius, `translateY(-8px)→0` + opacity at 150ms ease-out —
+> consistent with CLAUDE.md's search dropdown animation spec. Tickers rendered in IBM
+> Plex Mono. No icons (design decision #4/#9 equivalents).
+
 > **Phase 11 Step 3 amendment (2026-06-17):** M-1 (deep provenance) and M-5 (governance
 > schema validation).
 >

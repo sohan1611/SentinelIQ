@@ -12,8 +12,7 @@ import { RedFlagItem } from "@/components/modules/RedFlagItem";
 import { useStaggeredReveal } from "@/hooks/useStaggeredReveal";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useAddToWatchlist } from "@/lib/hooks/useAddToWatchlist";
-import { useCompanyData } from "@/lib/hooks/useCompanyData";
-import { useAnalysis } from "@/lib/hooks/useAnalysis";
+import { useCompanyContext } from "@/contexts/CompanyContext";
 import { useAnalysisHistory } from "@/lib/hooks/useAnalysisHistory";
 import { getScoreColor } from "@/lib/utils/scoreColor";
 import { formatScore } from "@/lib/utils/formatNumber";
@@ -73,8 +72,7 @@ const CONFIDENCE_TOOLTIPS: Record<"low" | "medium" | "high", string> = {
 export default function CompanyOverviewPage({ params }: { params: { ticker: string } }) {
   const ticker = params.ticker;
 
-  const { company, analysis, isLoading, error, refetch } = useCompanyData(ticker);
-  const { status: analysisStatus, isRunning, error: analysisError, start } = useAnalysis(refetch);
+  const { company, analysis, isLoading, error, analysisStatus, isRunning, analysisError, startAnalysis: start } = useCompanyContext();
   const { isAdding, add: handleAddToWatchlist } = useAddToWatchlist(ticker);
   const { history, isLoading: isHistoryLoading } = useAnalysisHistory(ticker);
 

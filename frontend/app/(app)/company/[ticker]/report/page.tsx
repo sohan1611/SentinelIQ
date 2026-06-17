@@ -8,7 +8,7 @@ import { RecommendationBox } from "@/components/modules/RecommendationBox";
 import { ReportSection } from "@/components/modules/ReportSection";
 import { buildForensicsCsv, downloadCsv } from "@/lib/utils/exportCsv";
 import { useAddToWatchlist } from "@/lib/hooks/useAddToWatchlist";
-import { useCompanyData } from "@/lib/hooks/useCompanyData";
+import { useCompanyContext } from "@/contexts/CompanyContext";
 import { useReport } from "@/lib/hooks/useReport";
 import { formatDate } from "@/lib/utils/formatDate";
 import { formatScore } from "@/lib/utils/formatNumber";
@@ -40,7 +40,7 @@ function buildRecommendation(analysis: AnalysisResultWithFlags): { variant: "sta
 
 export default function ReportPage({ params }: { params: { ticker: string } }) {
   const ticker = params.ticker;
-  const { company, analysis, isLoading: companyLoading, error } = useCompanyData(ticker);
+  const { company, analysis, isLoading: companyLoading, error } = useCompanyContext();
   const { report, isLoading: reportLoading } = useReport(ticker, !!analysis);
   const { isAdding, add: handleAddToWatchlist } = useAddToWatchlist(ticker);
 

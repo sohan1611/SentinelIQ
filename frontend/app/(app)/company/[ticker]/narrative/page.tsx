@@ -6,7 +6,7 @@ import { NarrativeComparison } from "@/components/modules/NarrativeComparison";
 import { ModuleScoreBadge } from "@/components/modules/ScoreCard";
 import { Badge } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { useCompanyData } from "@/lib/hooks/useCompanyData";
+import { useCompanyContext } from "@/contexts/CompanyContext";
 
 function toSentiment(label: string): "OPTIMISTIC" | "CAUTIONARY" | "NEUTRAL" {
   const upper = label.toUpperCase();
@@ -22,7 +22,7 @@ function sentimentRisk(sentiment: "OPTIMISTIC" | "CAUTIONARY" | "NEUTRAL"): "str
 
 export default function NarrativePage({ params }: { params: { ticker: string } }) {
   const ticker = params.ticker;
-  const { company, analysis, isLoading, error } = useCompanyData(ticker);
+  const { company, analysis, isLoading, error } = useCompanyContext();
 
   if (isLoading) {
     return (

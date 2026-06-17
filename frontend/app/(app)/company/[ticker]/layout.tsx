@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { useCompanyData } from "@/lib/hooks/useCompanyData";
 import { useAnalysis } from "@/lib/hooks/useAnalysis";
 import { formatDate } from "@/lib/utils/formatDate";
+import { CompanyContext } from "@/contexts/CompanyContext";
 
 export default function CompanyLayout({
   children,
@@ -50,7 +51,7 @@ export default function CompanyLayout({
     }
   }, [activeTabIndex, pathname]);
 
-  const { company, isLoading: isCompanyLoading, error: companyError, refetch } = useCompanyData(ticker);
+  const { company, analysis, isLoading: isCompanyLoading, error: companyError, refetch } = useCompanyData(ticker);
   const { status: analysisStatus, isRunning, error: analysisError, start } = useAnalysis(refetch);
 
   // Auto-dismiss the status bar a few seconds after the run finishes
@@ -191,7 +192,19 @@ export default function CompanyLayout({
       </div>
 
       <div className="w-full">
-        <PageTransition>{children}</PageTransition>
+        <CompanyContext.Provider value={{
+          company,
+          analysis,
+          isLoading: isCompanyLoading,
+          error: companyError,
+          refetch,
+          analysisStatus,
+          isRunning,
+          analysisError,
+          startAnalysis: start,
+        }}>
+          <PageTransition>{children}</PageTransition>
+        </CompanyContext.Provider>
       </div>
 
       <div className="w-full border-t border-[#E3DFD8] mt-10 pt-4 pb-2">
