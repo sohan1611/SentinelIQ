@@ -58,7 +58,7 @@ export default function CompanyLayout({
   const [statusDismissed, setStatusDismissed] = useState(false);
 
   useEffect(() => {
-    if (analysisStatus?.status === "complete" || analysisStatus?.status === "failed") {
+    if (analysisStatus?.status === "complete") {
       setStatusDismissed(false);
       const t = setTimeout(() => setStatusDismissed(true), 3000);
       return () => clearTimeout(t);
@@ -66,7 +66,6 @@ export default function CompanyLayout({
   }, [analysisStatus]);
 
   const isAnalysisComplete = analysisStatus?.status === "complete";
-  const isAnalysisFailed = analysisStatus?.status === "failed";
   const showStatusBar = isRunning || !!analysisError || (!!analysisStatus && !statusDismissed);
 
   return (
@@ -129,13 +128,13 @@ export default function CompanyLayout({
       {showStatusBar && (
         <div
           className={`w-full h-[36px] border-t border-b border-[#E3DFD8] flex items-center justify-between px-4 mb-4 transition-colors duration-300 ${
-            analysisError || isAnalysisFailed ? "bg-[#FAE8E8]" : isAnalysisComplete ? "bg-[#E4F2EB]" : "bg-[#F0EDE8]"
+            analysisError ? "bg-[#FAE8E8]" : isAnalysisComplete ? "bg-[#E4F2EB]" : "bg-[#F0EDE8]"
           }`}
         >
           <div className="flex items-center gap-3">
-            {analysisError || isAnalysisFailed ? (
+            {analysisError ? (
               <span className="font-sans text-[12px] text-[#B03028]">
-                {analysisError ?? "Analysis failed. Please try again."}
+                {analysisError}
               </span>
             ) : isAnalysisComplete ? (
               <>
@@ -155,7 +154,7 @@ export default function CompanyLayout({
               </>
             )}
           </div>
-          {analysisStatus && !analysisError && !isAnalysisFailed && (
+          {analysisStatus && !analysisError && (
             <div className="font-mono text-[12px] text-[#B0ADA7]">
               {Math.floor(analysisStatus.elapsed_seconds / 60)}:{(analysisStatus.elapsed_seconds % 60).toString().padStart(2, "0")}
             </div>

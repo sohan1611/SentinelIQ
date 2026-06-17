@@ -111,8 +111,6 @@ async def get_analysis_status(analysis_id: str, db: AsyncSession = Depends(get_d
         stage = analysis.status.split("running:", 1)[1]
     elif analysis.status == "complete":
         stage = "Complete"
-    elif analysis.status == "failed":
-        stage = "Failed"
     elif analysis.status == "error":
         stage = "Analysis interrupted"
 

@@ -157,9 +157,9 @@ export default function CompanyOverviewPage({ params }: { params: { ticker: stri
           >
             Run Analysis
           </Button>
-          {(analysisError || analysisStatus?.status === "failed") && (
+          {analysisError && (
             <div className="font-sans text-[12px] text-[#B03028] mt-4">
-              {analysisError ?? "Analysis failed. Please try again."}
+              {analysisError}
             </div>
           )}
         </div>
