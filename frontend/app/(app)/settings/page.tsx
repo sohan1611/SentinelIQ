@@ -94,10 +94,11 @@ function AccountTab() {
             </span>
           </div>
         </div>
-        <div className="flex justify-end">
+        <div className="flex flex-col items-end gap-1">
           <div className="w-[140px]">
-            <Button variant="secondary" className="w-full">Save Changes</Button>
+            <Button variant="secondary" className="w-full" disabled>Save Changes</Button>
           </div>
+          <span className="font-sans text-[11px] text-[#B0ADA7] italic">Profile updates not yet available.</span>
         </div>
       </section>
 
@@ -153,8 +154,9 @@ function AccountTab() {
             </div>
           </div>
         </div>
-        <div className="flex justify-end">
-          <Button variant="secondary">Update Password</Button>
+        <div className="flex flex-col items-end gap-1">
+          <Button variant="secondary" disabled>Update Password</Button>
+          <span className="font-sans text-[11px] text-[#B0ADA7] italic">Password changes not yet available.</span>
         </div>
       </section>
 
@@ -166,9 +168,15 @@ function AccountTab() {
             Permanently delete your account and all associated data. This action cannot be reversed.
           </p>
         </div>
-        <button className="h-[44px] px-6 font-sans text-[14px] font-semibold text-[#B03028] bg-[#FAE8E8] hover:bg-[#F2D6D6] transition-colors rounded-[6px] whitespace-nowrap self-start md:self-auto">
-          Delete Account
-        </button>
+        <div className="flex flex-col items-end gap-1 self-start md:self-auto">
+          <button
+            disabled
+            className="h-[44px] px-6 font-sans text-[14px] font-semibold text-[#B0ADA7] bg-[#F6F4EF] rounded-[6px] whitespace-nowrap cursor-not-allowed"
+          >
+            Delete Account
+          </button>
+          <span className="font-sans text-[11px] text-[#B0ADA7] italic">Contact support to delete your account.</span>
+        </div>
       </section>
     </>
   );
@@ -189,7 +197,8 @@ function NotificationsTab() {
   return (
     <section className="bg-[#FFFFFF] border border-[#E3DFD8] rounded-[8px] overflow-hidden">
       <div className="p-6 pb-4">
-        <h2 className="font-sans text-[10px] font-medium uppercase tracking-[0.08em] text-[#7A786F]">ALERT PREFERENCES</h2>
+        <h2 className="font-sans text-[10px] font-medium uppercase tracking-[0.08em] text-[#7A786F] mb-2">ALERT PREFERENCES</h2>
+        <p className="font-sans text-[12px] text-[#B0ADA7] italic">Preferences are not yet persisted — notification delivery is coming soon.</p>
       </div>
       <div className="flex flex-col divide-y divide-[#E3DFD8]">
         
@@ -255,8 +264,8 @@ function PlanTab() {
         <p className="font-sans text-[13px] text-[#7A786F] mb-6">5 company analyses per month. Watchlist limited to 10.</p>
 
         <div className="flex flex-col items-start gap-2">
-          <Button variant="primary">Upgrade to Pro</Button>
-          <span className="font-sans text-[12px] text-[#7A786F]">Unlimited analyses, full report export, API access.</span>
+          <Button variant="primary" disabled>Upgrade to Pro</Button>
+          <span className="font-sans text-[12px] text-[#7A786F]">Unlimited analyses, full report export, API access. Coming soon.</span>
         </div>
       </section>
 
@@ -275,8 +284,9 @@ function PlanTab() {
             <li className="flex"><span className="text-[#B0ADA7] mr-2">—</span>Historical comparison (12 months)</li>
           </ul>
         </div>
-        <div className="self-start md:self-end">
-          <Button variant="primary">Upgrade to Pro</Button>
+        <div className="self-start md:self-end flex flex-col items-end gap-1">
+          <Button variant="primary" disabled>Upgrade to Pro</Button>
+          <span className="font-sans text-[11px] text-[#B0ADA7] italic">Coming soon.</span>
         </div>
       </section>
     </>
