@@ -1,3 +1,4 @@
+import re
 import logging
 from pathlib import Path
 from typing import Optional
@@ -5,7 +6,6 @@ from typing import Optional
 from pydantic import BaseModel, field_validator
 
 from app.core.ai.gemini_client import generate_json_with_provenance
-from app.models.red_flag import RedFlag
 
 logger = logging.getLogger(__name__)
 
@@ -19,8 +19,28 @@ _VALID_SEVERITIES = {"moderate", "high", "severe"}
 _SEVERITY_DEDUCTIONS = {"moderate": 15, "high": 25, "severe": 35}
 
 
+def _normalize(text: str) -> str:
+    """Lowercase, collapse whitespace, strip common punctuation for fuzzy grounding match."""
+    text = text.lower()
+    text = re.sub(r"[''\".,;:!?()\[\]{}\-]", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _is_grounded(quote: Optional[str], source_text: str) -> bool:
+    """Return True if quote appears verbatim or (normalized) in source_text.
+
+    Verbatim check first; normalized fallback handles minor punctuation/case
+    differences without accepting fabricated quotes (Phase 14).
+    """
+    if not quote or not quote.strip():
+        return False
+    if quote in source_text:
+        return True
+    return _normalize(quote) in _normalize(source_text)
+
+
 class GovernanceEvent(BaseModel):
-    """Validated shape for a single governance event returned by Gemini (M-5).
+    """Validated shape for a single governance event returned by Gemini (M-5, Phase 14).
 
     Unknown severities are normalized to "moderate" with a warning rather than
     silently skipped — a parseable-but-malformed response should still produce
@@ -29,6 +49,7 @@ class GovernanceEvent(BaseModel):
 
     severity: str
     description: str
+    source_quote: Optional[str] = None
     event_type: Optional[str] = None
     event_date_approx: Optional[str] = None
 
@@ -93,12 +114,21 @@ class GovernanceScorer:
                 logger.warning(f"GovernanceScorer: invalid event schema, skipping: {e}")
                 continue
 
+            if not _is_grounded(event.source_quote, news_text):
+                logger.warning(
+                    "GovernanceScorer: dropping ungrounded event type=%r "
+                    "(source_quote not found in news_text)",
+                    event.event_type,
+                )
+                continue
+
             score -= _SEVERITY_DEDUCTIONS[event.severity]
             flags.append({
                 "flag_type": "governance",
                 "severity": event.severity,
                 "description": event.description,
                 "period": event.event_date_approx[:20] if event.event_date_approx else None,
+                "source_quote": event.source_quote,
             })
 
         score = max(0.0, min(100.0, score))

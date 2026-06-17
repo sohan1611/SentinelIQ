@@ -225,6 +225,18 @@ and raw response persisted to `module_details.{governance,narrative}.provenance`
 ### 6a. Governance Risk
 `backend/app/core/governance/governance_scorer.py`
 
+**Grounding gate (Phase 14).** Every governance event returned by Gemini must include a
+`source_quote` — an exact phrase from the input `news_text` that supports the claim.
+Before scoring, the backend checks `source_quote` against `news_text` (verbatim, then
+normalized: lowercase + collapse punctuation/whitespace). Events that fail this check are
+**dropped** — they receive no deduction and are not persisted as `RedFlag` records. This
+prevents fabricated events from becoming persisted risk labels on real companies. Events
+with an empty or missing `source_quote` are also dropped (treated as ungrounded). A
+genuine finding that Gemini failed to quote verbatim may be lost — this is intentional:
+false negatives on a grounding check are safer than false positives on a defamation risk.
+The grounded `source_quote` is stored in `module_details.governance.flags[*].source_quote`
+and surfaced in the evidence panel on the Overview page.
+
 - If the fetched news text is shorter than `MIN_NEWS_TEXT_LENGTH` (40 characters), Gemini
   is **not called** — returns `50.0` with `low_confidence: true` (Error Handling rule 2b;
   "empty governance ≠ 100").

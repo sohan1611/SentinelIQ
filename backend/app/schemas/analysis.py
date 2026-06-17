@@ -36,6 +36,7 @@ class NarrativeModuleDetails(BaseModel):
 class GovernanceModuleDetails(BaseModel):
     provenance: Dict[str, Any] = {}
     low_confidence: bool = False
+    flags: List[Dict[str, Any]] = []
 
 class ModuleDetails(BaseModel):
     scores: Dict[str, float] = {}

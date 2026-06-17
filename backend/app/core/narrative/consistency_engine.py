@@ -1,6 +1,28 @@
+import re
+import logging
 from pathlib import Path
-from typing import List, Dict
+from typing import List, Dict, Optional
+
 from app.core.ai.gemini_client import generate_json_with_provenance
+
+logger = logging.getLogger(__name__)
+
+
+def _normalize(text: str) -> str:
+    """Lowercase, collapse whitespace, strip common punctuation for fuzzy grounding match."""
+    text = text.lower()
+    text = re.sub(r"[''\".,;:!?()\[\]{}\-]", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _is_grounded(quote: Optional[str], source_text: str) -> bool:
+    """Return True if quote appears verbatim or (normalized) in source_text (Phase 14)."""
+    if not quote or not quote.strip():
+        return False
+    if quote in source_text:
+        return True
+    return _normalize(quote) in _normalize(source_text)
+
 
 class ConsistencyEngine:
     async def analyze(self, company_name: str, statements: List[Dict[str, str]]) -> tuple[float, list[dict], list[dict], list[dict]]:
@@ -27,12 +49,22 @@ class ConsistencyEngine:
             if result is None:
                 continue
 
+            source_quote = result.get("source_quote")
+            if not _is_grounded(source_quote, text):
+                logger.warning(
+                    "ConsistencyEngine: dropping ungrounded snapshot period=%r "
+                    "(source_quote not found in statement_text)",
+                    period,
+                )
+                continue
+
             snapshots.append({
                 "period": period,
                 "statement_text": text,
                 "sentiment_label": result.get("sentiment_label", "neutral"),
                 "sentiment_score": float(result.get("sentiment_score", 0.0)),
-                "source": source
+                "source": source,
+                "source_quote": source_quote,
             })
 
         if len(snapshots) < 2:
@@ -44,7 +76,7 @@ class ConsistencyEngine:
         contradiction_scores = []
 
         for i in range(1, len(snapshots)):
-            prev = snapshots[i-1]
+            prev = snapshots[i - 1]
             curr = snapshots[i]
 
             diff = abs(curr["sentiment_score"] - prev["sentiment_score"])
@@ -55,7 +87,7 @@ class ConsistencyEngine:
                     "flag_type": "narrative",
                     "severity": "high" if diff > 0.8 else "moderate",
                     "description": f"Significant tone shift between {prev['period']} and {curr['period']} (Score diff: {diff:.2f})",
-                    "period": curr["period"]
+                    "period": curr["period"],
                 })
 
         if not contradiction_scores:

@@ -62,6 +62,12 @@ export function getFlagEvidence(flag: RedFlag, moduleDetails: ModuleDetails | nu
         rows.push({ label: "Source", value: "Recent news coverage" });
         rows.push({ label: "AI Model", value: provenance.model_id });
       }
+      const govFlag = moduleDetails.governance?.flags?.find(
+        (f) => f.description === flag.description
+      );
+      if (govFlag?.source_quote) {
+        rows.push({ label: "Source Quote", value: govFlag.source_quote });
+      }
       break;
     }
     default:

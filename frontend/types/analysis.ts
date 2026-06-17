@@ -67,6 +67,14 @@ export interface GovernanceProvenance {
   low_confidence: boolean;
 }
 
+export interface GovernanceFlagDetail {
+  flag_type: string;
+  severity: string;
+  description: string;
+  period: string | null;
+  source_quote: string | null;
+}
+
 export interface ModuleScores {
   financial?: number;
   cashflow?: number;
@@ -101,6 +109,7 @@ export interface ModuleDetails {
   governance?: {
     provenance?: GovernanceProvenance;
     low_confidence?: boolean;
+    flags?: GovernanceFlagDetail[];
   };
 }
 

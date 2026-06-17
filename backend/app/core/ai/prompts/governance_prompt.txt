@@ -13,7 +13,11 @@ Headlines and excerpts:
 
 For each event found, return JSON:
 {{ "event_type": str, "event_date_approx": str,
-  "severity": "moderate"|"high"|"severe", "description": str }}
+  "severity": "moderate"|"high"|"severe", "description": str,
+  "source_quote": "exact phrase copied verbatim from the text above that supports this event" }}
+
+source_quote must be a verbatim substring of the provided headlines above.
+If you cannot find an exact supporting phrase in the text, do not include this event.
 
 Return only a valid JSON array. No preamble, no explanation.
 If no events found, return an empty array: []

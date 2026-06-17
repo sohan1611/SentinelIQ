@@ -7,7 +7,10 @@ Return JSON with exactly these fields:
 {{
   "sentiment_label": "optimistic" | "neutral" | "cautionary",
   "sentiment_score": float from -1.0 (very cautionary) to 1.0 (very optimistic),
-  "key_claims": [list of 2-4 specific factual claims made]
+  "key_claims": [list of 2-4 specific factual claims made],
+  "source_quote": "exact phrase copied verbatim from the statement above that most strongly supports the sentiment_label"
 }}
+
+source_quote must be a verbatim substring of the provided statement above.
 
 Return only valid JSON. No preamble, no explanation, no markdown.

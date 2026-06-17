@@ -50,6 +50,7 @@ class StageContext:
     narrative_provenance: list = field(default_factory=list)
     narrative_tone_shifts: list = field(default_factory=list)
     governance_provenance: dict = field(default_factory=dict)
+    governance_flags: list = field(default_factory=list)
 
 
 @dataclass
@@ -121,11 +122,15 @@ async def _stage_governance(ctx: StageContext):
         gov_score, gov_flags, provenance = await GovernanceScorer().analyze(ctx.company.name, news_text)
         ctx.scores["governance"] = gov_score
         ctx.governance_provenance = provenance
+        ctx.governance_flags = gov_flags
         for gf in gov_flags:
             flag_rec = RedFlag(
                 analysis_id=ctx.analysis_id,
                 company_id=ctx.company_id,
-                **gf,
+                flag_type=gf["flag_type"],
+                severity=gf["severity"],
+                description=gf["description"],
+                period=gf.get("period"),
             )
             ctx.session.add(flag_rec)
             ctx.all_flags.append(flag_rec)
@@ -203,6 +208,7 @@ async def _stage_score_persist(ctx: StageContext):
             "governance": {
                 "provenance": ctx.governance_provenance,
                 "low_confidence": ctx.governance_provenance.get("low_confidence", False),
+                "flags": ctx.governance_flags,
             },
         }
         await ctx.session.commit()
