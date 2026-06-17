@@ -216,7 +216,7 @@ participates in the Integrity Score weighting.
 
 ---
 
-## 6. AI-scored modules (Gemini 1.5 Flash, `temperature=0`)
+## 6. AI-scored modules (Gemini 2.5 Flash, `temperature=0`)
 
 Both modules below run at `temperature=0` with a pinned `model_id`, with the exact prompt
 and raw response persisted to `module_details.{governance,narrative}.provenance` (ADR-004

@@ -124,7 +124,7 @@ Amendments are explicit and dated — never silent behavioral changes inside a f
 > `cashflow.accrual_ratios` AND `debt.debt_metrics` (debt_analysis.py also emits
 > `flag_type="cash_flow"`, so both series are checked for a matching `period`);
 > `"earnings"` → `earnings.margins`/`net_incomes`; `"governance"` → `governance.provenance`
-> (rendered as `AI Model: gemini-2.0-flash` / `Source: Recent news coverage`, guarded on
+> (rendered as `AI Model: gemini-2.5-flash` / `Source: Recent news coverage`, guarded on
 > `provenance?.model_id` — a governance flag only exists when that call succeeded).
 > `frontend/components/modules/RedFlagItem.tsx` gained an optional `evidence?:
 > EvidenceRow[]` prop: when non-empty, a text "Evidence"/"Hide" toggle (decision #9 — text,
@@ -204,6 +204,12 @@ Amendments are explicit and dated — never silent behavioral changes inside a f
 > **Model.** `DEFAULT_MODEL_ID` changed from `"gemini-1.5-flash"` to `"gemini-2.0-flash"`.
 > All `model_id` references in CLAUDE.md (tech stack table, Phase 3 amendment, Phase 11
 > Step 2 amendment) updated to match.
+
+> **Model hotfix (2026-06-18):** `gemini-2.0-flash` has zero free-tier quota on the
+> project API key (confirmed 429 RESOURCE_EXHAUSTED). `DEFAULT_MODEL_ID` changed from
+> `"gemini-2.0-flash"` to `"gemini-2.5-flash"` — confirmed working live (200 OK,
+> text response received). CLAUDE.md tech stack table, Phase 3 amendment `model_id` pin,
+> and Phase 11 Step 2 amendment UI display string updated to match.
 
 ---
 
@@ -287,7 +293,7 @@ The core USP: instead of predicting stock prices, it answers
 | Backend | FastAPI (Python 3.11+) | Async with asyncpg |
 | Database | PostgreSQL | SQLAlchemy ORM (async) |
 | Migrations | Alembic | |
-| AI | Google Gemini 2.0 Flash | Free tier: 1,500 req/day |
+| AI | Google Gemini 2.5 Flash | Free tier: 1,500 req/day |
 | Finance Data | yfinance | asyncio.to_thread wrapper |
 | News | feedparser (RSS) | 3 feeds per ticker |
 | Auth | JWT + bcrypt | python-jose + passlib |
@@ -616,7 +622,7 @@ renormalization formula above. `confidence` is persisted at
 `AnalysisResult.module_details.confidence`.
 
 **AI provenance (ADR-004).** `governance` and `narrative` are score-bearing AI calls and
-run at `temperature=0` with a pinned `model_id` (`gemini-2.0-flash`), with prompts and raw
+run at `temperature=0` with a pinned `model_id` (`gemini-2.5-flash`), with prompts and raw
 responses persisted for auditability:
 - `module_details.governance.provenance` → `{model_id, prompt, raw_response}`
 - `module_details.narrative.provenance` → list of `{period, model_id, prompt, raw_response}`, one per statement

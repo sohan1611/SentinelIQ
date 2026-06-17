@@ -10,7 +10,7 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL_ID = "gemini-2.0-flash"
+DEFAULT_MODEL_ID = "gemini-2.5-flash"
 client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
 MAX_RETRIES = 3

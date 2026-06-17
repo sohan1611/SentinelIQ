@@ -97,9 +97,9 @@ currently an unused stub) is the Horizon 2 plan for closing this gap.
 
 ---
 
-## 3. AI analysis — Google Gemini 1.5 Flash
+## 3. AI analysis — Google Gemini 2.5 Flash
 
-**Source:** Google Gemini 1.5 Flash (free tier, 1,500 requests/day), via
+**Source:** Google Gemini 2.5 Flash (free tier, 1,500 requests/day), via
 `backend/app/core/ai/gemini_client.py`.
 
 Used for two score-bearing tasks:
@@ -139,7 +139,7 @@ despite stub files existing in the codebase for future use:
 |---|---|---|---|
 | Financial statements | yfinance (Yahoo Finance) | **No — restated/current view** | Revenue, cash flow, earnings, debt forensics |
 | News headlines | Google News / Yahoo Finance / Reuters RSS | Yes (publish date) | News sentiment, governance events, narrative consistency |
-| AI extraction/scoring | Google Gemini 1.5 Flash, `temperature=0` | N/A | Governance events, narrative contradictions |
+| AI extraction/scoring | Google Gemini 2.5 Flash, `temperature=0` | N/A | Governance events, narrative contradictions |
 
 Every limitation above is a reason SentinelIQ's output is framed as an **algorithmic
 screening signal**, not a definitive fraud determination — see the disclaimer shown on
