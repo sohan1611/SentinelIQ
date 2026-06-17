@@ -115,6 +115,12 @@ news-text input is too short to meaningfully evaluate (under 40 characters — s
 a single typical headline), Gemini is not called at all and the module returns a neutral
 score with a `low_confidence` marker (see CLAUDE.md, Error Handling rule 2b).
 
+**Reliability guards (Phase 16).** Each Gemini call has a 30-second timeout
+(`GEMINI_CALL_TIMEOUT_SECONDS`) — a hung API response fails its stage rather than
+blocking the pipeline. A per-process daily counter (`GEMINI_DAILY_BUDGET = 200`, reset
+at UTC midnight) caps total requests as a runaway-loop guard; when hit, AI modules return
+their neutral fallback with no API call and the analysis continues normally.
+
 ---
 
 ## 4. What SentinelIQ does NOT use

@@ -3,6 +3,8 @@ import yfinance as yf
 from fastapi import HTTPException
 from app.services import cache
 
+YFINANCE_TIMEOUT_SECONDS = 20.0
+
 # curl_cffi impersonates Chrome at the TLS layer (JA3/JA4 fingerprint), which is
 # what Yahoo Finance's Cloudflare protection checks. A plain requests.Session with
 # browser headers is not enough — the TLS fingerprint still identifies python-requests.
@@ -43,7 +45,10 @@ async def fetch_company_info(ticker: str) -> dict:
             "marketCap": info.get("marketCap")
         }
 
-    data = await asyncio.to_thread(_fetch)
+    try:
+        data = await asyncio.wait_for(asyncio.to_thread(_fetch), timeout=YFINANCE_TIMEOUT_SECONDS)
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=503, detail="Financial data timed out. Please try again.")
     cache.set(cache_key, data, ttl_seconds=86400)
     return data
 
@@ -114,6 +119,6 @@ async def fetch_financials(ticker: str) -> list[dict]:
                 raise e
             raise HTTPException(status_code=404, detail="No financial data available for this ticker.")
 
-    data = await asyncio.to_thread(_fetch)
+    data = await asyncio.wait_for(asyncio.to_thread(_fetch), timeout=YFINANCE_TIMEOUT_SECONDS)
     cache.set(cache_key, data, ttl_seconds=43200)
     return data

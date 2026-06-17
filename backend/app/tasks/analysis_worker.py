@@ -144,7 +144,7 @@ async def _stage_governance(ctx: StageContext):
 
 async def _stage_narrative(ctx: StageContext):
     try:
-        statements = await fetch_news_statements(ctx.company.name, ctx.company.ticker, limit=5)
+        statements = await fetch_news_statements(ctx.company.name, ctx.company.ticker, limit=2)
         if len(statements) < 2:
             ctx.scores["narrative"] = 50.0
             return

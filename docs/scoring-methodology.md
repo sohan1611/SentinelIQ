@@ -218,6 +218,19 @@ participates in the Integrity Score weighting.
 
 ## 6. AI-scored modules (Gemini 2.5 Flash, `temperature=0`)
 
+**Per-call timeout (Phase 16).** Every Gemini call is wrapped with
+`asyncio.wait_for(..., timeout=30s)` (`GEMINI_CALL_TIMEOUT_SECONDS`). On timeout the call
+fails immediately — the stage falls back to its normal failure value (`50.0` or `None` per
+rules in §3 and Error Handling rule 2). A stalled Gemini response can no longer hang the
+entire analysis pipeline.
+
+**Daily budget guard (Phase 16).** A process-wide counter (`GEMINI_DAILY_BUDGET = 200`)
+resets each UTC day. Once exhausted, subsequent calls return `text=None` immediately
+without making an API request — the caller receives the same neutral result as any
+Gemini failure. This is a conservative guard against runaway loops, well below Gemini's
+1,500 req/day free-tier limit; normal analysis throughput stays far under it.
+
+
 Both modules below run at `temperature=0` with a pinned `model_id`, with the exact prompt
 and raw response persisted to `module_details.{governance,narrative}.provenance` (ADR-004
 — deterministic, explainable, auditable AI).

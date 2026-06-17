@@ -2,6 +2,7 @@ import json
 import asyncio
 import random
 import logging
+from datetime import datetime, timezone
 from typing import TypedDict
 
 from google import genai
@@ -15,6 +16,24 @@ client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
 MAX_RETRIES = 3
 BASE_BACKOFF_SECONDS = 2.0
+GEMINI_CALL_TIMEOUT_SECONDS = 30.0
+GEMINI_DAILY_BUDGET = 200
+
+# Process-wide daily call counter — resets at UTC midnight.
+# Dict operations under the GIL are effectively atomic for a single-process app.
+_daily_state: dict = {"date": None, "count": 0}
+
+
+def _budget_check_and_increment() -> bool:
+    """Return True and increment counter if a call can proceed; False if daily budget is exhausted."""
+    today = datetime.now(timezone.utc).date()
+    if _daily_state["date"] != today:
+        _daily_state["date"] = today
+        _daily_state["count"] = 0
+    if _daily_state["count"] >= GEMINI_DAILY_BUDGET:
+        return False
+    _daily_state["count"] += 1
+    return True
 
 
 class GenerationResult(TypedDict):
@@ -70,7 +89,7 @@ async def _call_with_backoff(coro_fn):
     last_exc: Exception | None = None
     for attempt in range(MAX_RETRIES):
         try:
-            return await coro_fn()
+            return await asyncio.wait_for(coro_fn(), timeout=GEMINI_CALL_TIMEOUT_SECONDS)
         except Exception as e:
             last_exc = e
             is_429 = (
@@ -89,6 +108,9 @@ async def _call_with_backoff(coro_fn):
 
 
 async def generate_content(prompt: str, temperature: float | None = None) -> str | None:
+    if not _budget_check_and_increment():
+        logger.warning(f"Gemini daily budget ({GEMINI_DAILY_BUDGET}) exhausted — skipping call")
+        return None
     config = _build_config(temperature)
 
     async def _call():
@@ -106,6 +128,9 @@ async def generate_content(prompt: str, temperature: float | None = None) -> str
 
 
 async def generate_content_with_provenance(prompt: str, temperature: float = 0.0) -> GenerationResult:
+    if not _budget_check_and_increment():
+        logger.warning(f"Gemini daily budget ({GEMINI_DAILY_BUDGET}) exhausted — returning neutral result")
+        return {"text": None, "prompt": prompt, "model_id": DEFAULT_MODEL_ID, "raw_response": None}
     config = _build_config(temperature)
 
     async def _call():

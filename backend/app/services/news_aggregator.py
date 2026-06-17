@@ -1,8 +1,13 @@
 import asyncio
+import logging
 import time
 import feedparser
 from datetime import datetime, timedelta
 from app.services import cache
+
+logger = logging.getLogger(__name__)
+
+NEWS_FETCH_TIMEOUT_SECONDS = 15.0
 
 
 async def _fetch_google_news(ticker: str) -> list[dict]:
@@ -35,7 +40,11 @@ async def _fetch_google_news(ticker: str) -> list[dict]:
             pass
         return items
 
-    items = await asyncio.to_thread(_fetch)
+    try:
+        items = await asyncio.wait_for(asyncio.to_thread(_fetch), timeout=NEWS_FETCH_TIMEOUT_SECONDS)
+    except asyncio.TimeoutError:
+        logger.warning(f"Google News fetch timed out for {ticker}")
+        items = []
     cache.set(cache_key, items, ttl_seconds=7200)
     return items
 
@@ -69,7 +78,12 @@ async def fetch_news_sentiment(company_name: str, ticker: str) -> float:
                 continue
         return headlines
 
-    extra_headlines = await asyncio.to_thread(_fetch_extra)
+    try:
+        extra_headlines = await asyncio.wait_for(
+            asyncio.to_thread(_fetch_extra), timeout=NEWS_FETCH_TIMEOUT_SECONDS
+        )
+    except asyncio.TimeoutError:
+        extra_headlines = []
     headlines = [item["title"].lower() for item in google_items] + extra_headlines
 
     if not headlines:
