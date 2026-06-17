@@ -31,9 +31,11 @@ class NarrativeModuleDetails(BaseModel):
     snapshots: List[Dict[str, Any]] = []
     statements_used: int = 0
     provenance: List[Dict[str, Any]] = []
+    tone_shifts: List[Dict[str, Any]] = []
 
 class GovernanceModuleDetails(BaseModel):
     provenance: Dict[str, Any] = {}
+    low_confidence: bool = False
 
 class ModuleDetails(BaseModel):
     scores: Dict[str, float] = {}

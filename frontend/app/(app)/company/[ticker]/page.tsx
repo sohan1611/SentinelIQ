@@ -18,7 +18,7 @@ import { useAnalysisHistory } from "@/lib/hooks/useAnalysisHistory";
 import { getScoreColor } from "@/lib/utils/scoreColor";
 import { formatScore } from "@/lib/utils/formatNumber";
 import { formatDate } from "@/lib/utils/formatDate";
-import { normalizeSeverity, flagDate } from "@/lib/utils/redFlag";
+import { normalizeSeverity, flagDate, getFlagEvidence } from "@/lib/utils/redFlag";
 
 type ScoreKey =
   | "financial_score"
@@ -299,6 +299,7 @@ export default function CompanyOverviewPage({ params }: { params: { ticker: stri
                         date={flagDate(flag)}
                         description={flag.description}
                         type={flag.flag_type.replace(/_/g, " ")}
+                        evidence={getFlagEvidence(flag, analysis.module_details)}
                       />
                     ))}
                   </div>

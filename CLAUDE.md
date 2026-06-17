@@ -103,6 +103,37 @@ Amendments are explicit and dated — never silent behavioral changes inside a f
 > (matching CLAUDE.md's "skeleton loaders only" rule) renders while the history fetch is
 > in flight, so the empty state never flashes before real data arrives.
 
+> **Phase 11 Step 2 amendment (2026-06-16):** "Evidence drill-down" (OPUS Phase 11 success
+> criterion: "every flag traces to a source"), plus a schema bug fix it depends on.
+>
+> **Schema fix.** `backend/app/schemas/analysis.py`'s `NarrativeModuleDetails` and
+> `GovernanceModuleDetails` were missing `tone_shifts: List[Dict[str, Any]] = []` and
+> `low_confidence: bool = False`. Pydantic v2's default `extra="ignore"` silently dropped
+> both fields from every `AnalysisResultResponse`, even though `analysis_worker.py`'s
+> `_stage_score_persist` always writes `module_details.narrative.tone_shifts` and
+> `module_details.governance.low_confidence`, and the frontend's Phase 9 UI
+> (`governance/page.tsx`'s low-confidence disclaimer, `narrative/page.tsx`'s tone-shift
+> contradiction alerts) was already built to consume them — both were silently dead.
+> Adding the two fields is purely additive; `frontend/types/analysis.ts` already declared
+> them.
+>
+> **Evidence drill-down.** `frontend/lib/utils/redFlag.ts` adds
+> `getFlagEvidence(flag, moduleDetails) -> EvidenceRow[]`, mapping a `RedFlag`'s
+> `flag_type` + `period` back to the `module_details` row(s) that produced it:
+> `"revenue"` → `revenue.divergences`/`recv_ratios`; `"cash_flow"` → BOTH
+> `cashflow.accrual_ratios` AND `debt.debt_metrics` (debt_analysis.py also emits
+> `flag_type="cash_flow"`, so both series are checked for a matching `period`);
+> `"earnings"` → `earnings.margins`/`net_incomes`; `"governance"` → `governance.provenance`
+> (rendered as `AI Model: gemini-1.5-flash` / `Source: Recent news coverage`, guarded on
+> `provenance?.model_id` — a governance flag only exists when that call succeeded).
+> `frontend/components/modules/RedFlagItem.tsx` gained an optional `evidence?:
+> EvidenceRow[]` prop: when non-empty, a text "Evidence"/"Hide" toggle (decision #9 — text,
+> not an icon) expands a label/value panel below the flag row.
+> `frontend/app/(app)/company/[ticker]/page.tsx`'s FLAG DETAILS list passes
+> `evidence={getFlagEvidence(flag, analysis.module_details)}` to each `RedFlagItem`. Flags
+> with no matching `module_details` row (older analyses, or pre-Phase-3 analyses with no
+> `module_details` at all) render `evidence=[]` — no toggle, identical to the prior UI.
+
 ---
 
 ## Git Commit Identity — MANDATORY

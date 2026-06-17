@@ -25,9 +25,13 @@ def _module_details():
             "provenance": [
                 {"period": "2023-01", "model_id": "gemini-1.5-flash", "prompt": "p1", "raw_response": "r1"},
             ],
+            "tone_shifts": [
+                {"period": "2023-01", "severity": "high", "description": "Tone shifted from optimistic to cautionary"},
+            ],
         },
         "governance": {
-            "provenance": {"model_id": "gemini-1.5-flash", "prompt": "gov-prompt", "raw_response": "gov-raw"},
+            "provenance": {"model_id": "gemini-1.5-flash", "prompt": "gov-prompt", "raw_response": "gov-raw", "low_confidence": False},
+            "low_confidence": False,
         },
     }
 
@@ -47,7 +51,9 @@ def test_module_details_round_trips_full_shape():
     assert response.module_details.scores["debt"] == 65.0
     assert response.module_details.narrative.statements_used == 2
     assert response.module_details.narrative.provenance[0]["model_id"] == "gemini-1.5-flash"
+    assert response.module_details.narrative.tone_shifts[0]["severity"] == "high"
     assert response.module_details.governance.provenance["model_id"] == "gemini-1.5-flash"
+    assert response.module_details.governance.low_confidence is False
 
 
 def test_module_details_handles_governance_failure_shape():
@@ -67,6 +73,7 @@ def test_module_details_handles_governance_failure_shape():
 
     assert "governance" not in response.module_details.scores
     assert response.module_details.governance.provenance == {}
+    assert response.module_details.governance.low_confidence is False
 
 
 def test_module_details_none_for_pending_analysis():
