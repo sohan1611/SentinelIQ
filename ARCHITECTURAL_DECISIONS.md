@@ -500,6 +500,7 @@ Smaller decisions, recorded for completeness so they aren't silently reversed.
 
 - **MR-1 — ToastContext conforms to the constitution.** The implemented toast deviates from `CLAUDE.md` (translateY both directions, 4000ms, no max-3 cap). **Ruling:** bring the *code* to the *spec* (translateX enter, 3000ms, max-3) — the constitution wins. Scheduled: Phase 1. *(= OPUS review Decision #3.)*
 - **MR-2 — Dead/stub files are deleted, not carried.** The 0-byte backend stubs (`risk_classifier.py`, `weights.py`, `api/v1/deps.py`, `api/middleware/*`, the 8 "planned" modules) and unused deps (`lucide-react`) are **deleted** in the cleanup phase; their *intent* is tracked in `OPUS_ARCHITECTURAL_REVIEW.md` (Horizon 2) and re-created only when their feature is scheduled. Empty files are not a plan. Scheduled: Phase 10. *(= OPUS review Decision #4.)*
+  **MR-2 closure (2026-06-18, Phase 13):** The 9 remaining 0-byte stubs (`board_analysis.py`, `exec_turnover.py`, `sentiment_scorer.py`, `statement_extractor.py`, `transcript_parser.py`, `risk_classifier.py`, `weights.py`, `sec_scraper.py`, `transcript_fetcher.py`) were confirmed unimported and deleted. Their Horizon 2 intent (SEC EDGAR pipeline, transcript NLP) is tracked in `FUTURE_ARCHITECTURE.md`.
 - **MR-3 — Honest stubs over fake flows.** Forgot-password / verify-email pages must become honest "not yet available" states with the dev-only debug toggles **removed**, unless real email flows are explicitly prioritized. Scheduled: Phase 10.
 
 ---

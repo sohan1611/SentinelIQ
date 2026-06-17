@@ -270,8 +270,7 @@ filter silently drops it from the weighted sum regardless of its value.
 *headlines* (see [`data-sources.md`](data-sources.md)), not from management's own
 earnings-call or filing language. It measures press-coverage tone consistency — a real
 but different signal than the "management narrative consistency" the product name
-implies. Until a real transcript pipeline exists (Horizon 2,
-`transcript_fetcher.py`/`sec_scraper.py`), narrative is shown as
+implies. Until a real transcript pipeline exists (Horizon 2 — see `FUTURE_ARCHITECTURE.md`), narrative is shown as
 **"News Tone (experimental)"** and carries zero weight rather than diluting the Integrity
 Score with a constant or a misleadingly-labeled signal.
 

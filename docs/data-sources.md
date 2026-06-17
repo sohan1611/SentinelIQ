@@ -51,8 +51,7 @@ for.
 reports it today, show signs of aggressive accounting?"* — **not** *"Did this company's
 originally-filed financials show signs of fraud?"* These are different questions, and
 SentinelIQ can currently only answer the first. Closing this gap would require a
-point-in-time SEC EDGAR pipeline (see `backend/app/services/sec_scraper.py`, an unused
-stub — Horizon 2).
+point-in-time SEC EDGAR pipeline (Horizon 2 — see `FUTURE_ARCHITECTURE.md`).
 
 ---
 
@@ -92,8 +91,7 @@ This means:
   statements* contradict each other over time. This is why `narrative_score` is currently
   excluded from the weight vector (ADR-006) and labeled "experimental" in the UI.
 
-A real earnings-call/SEC transcript pipeline (`backend/app/services/transcript_fetcher.py`,
-currently an unused stub) is the Horizon 2 plan for closing this gap.
+A real earnings-call/SEC transcript pipeline (Horizon 2 — see `FUTURE_ARCHITECTURE.md`) is the plan for closing this gap.
 
 ---
 
@@ -124,9 +122,8 @@ score with a `low_confidence` marker (see CLAUDE.md, Error Handling rule 2b).
 To set expectations explicitly — the following are **not** part of the current pipeline,
 despite stub files existing in the codebase for future use:
 
-- **SEC EDGAR / as-filed regulatory data** (`sec_scraper.py` — unused stub, Horizon 2)
-- **Earnings call or investor-day transcripts** (`transcript_fetcher.py` — unused stub,
-  Horizon 2)
+- **SEC EDGAR / as-filed regulatory data** (Horizon 2)
+- **Earnings call or investor-day transcripts** (Horizon 2)
 - **Any paid or point-in-time financial data provider**
 - **Insider trading / Form 4 data**
 - **Social media or analyst-estimate data**

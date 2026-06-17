@@ -1,5 +1,12 @@
 version: '3.8'
 
+# Local development database only.
+# The backend and frontend have no Dockerfiles — run them directly:
+#   cd backend && uvicorn app.main:app --reload --port 8000
+#   cd frontend && npm run dev
+#
+# After starting this container, run: cd backend && alembic upgrade head
+
 services:
   db:
     image: postgres:15
@@ -11,27 +18,6 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./database/schema.sql:/docker-entrypoint-initdb.d/schema.sql
-
-  backend:
-    build:
-      context: ./backend
-    ports:
-      - "8000:8000"
-    environment:
-      - DATABASE_URL=postgresql+asyncpg://postgres:password@db:5432/sentineliq
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - SECRET_KEY=${SECRET_KEY}
-    depends_on:
-      - db
-
-  frontend:
-    build:
-      context: ./frontend
-    ports:
-      - "3000:3000"
-    environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
 
 volumes:
   postgres_data:
