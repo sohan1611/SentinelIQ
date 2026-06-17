@@ -88,9 +88,18 @@ export function IntegrityScoreGauge({ score, lastAnalyzed, loading, startAnimati
   const fillDasharray = `${drawnLength} ${circumference}`;
 
   return (
-    <div className="flex flex-col items-center">
+    <div
+      className="flex flex-col items-center"
+      role="meter"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={score}
+      aria-valuetext={`${score} out of 100 — ${risk.label}`}
+      aria-label="Corporate Integrity Score"
+    >
       <div className="relative w-[140px] h-[140px] md:w-[200px] md:h-[200px] flex items-center justify-center">
         <svg
+          aria-hidden="true"
           className="absolute top-0 left-0 w-full h-full transform -rotate-90"
           viewBox="0 0 200 200"
         >
@@ -122,7 +131,7 @@ export function IntegrityScoreGauge({ score, lastAnalyzed, loading, startAnimati
           )}
         </svg>
 
-        <div className="flex flex-col items-center justify-center z-10 mt-4 md:mt-6">
+        <div aria-hidden="true" className="flex flex-col items-center justify-center z-10 mt-4 md:mt-6">
           <div className={`font-mono text-[52px] md:text-[72px] font-bold leading-none ${risk.color}`}>
             {currentScore}
           </div>

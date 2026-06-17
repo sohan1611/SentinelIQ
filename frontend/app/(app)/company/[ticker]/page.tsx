@@ -205,9 +205,17 @@ export default function CompanyOverviewPage({ params }: { params: { ticker: stri
                           {formatScore(score)}
                         </span>
                       </div>
-                      <div className="w-full h-[6px] bg-[#E3DFD8] rounded-full overflow-hidden">
+                      <div
+                        role="meter"
+                        aria-label={label}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={score ?? 0}
+                        aria-valuetext={hasScore ? `${Math.round(score as number)} out of 100` : "No signal available"}
+                        className="w-full h-[6px] bg-[#E3DFD8] rounded-full overflow-hidden"
+                      >
                         {hasScore && (
-                          <div className="h-full rounded-full" style={{ width: `${score}%`, backgroundColor: color }} />
+                          <div aria-hidden="true" className="h-full rounded-full" style={{ width: `${score}%`, backgroundColor: color }} />
                         )}
                       </div>
                     </div>
