@@ -4,10 +4,10 @@ for the period {period}:
 "{statement_text}"
 
 Return JSON with exactly these fields:
-{
+{{
   "sentiment_label": "optimistic" | "neutral" | "cautionary",
   "sentiment_score": float from -1.0 (very cautionary) to 1.0 (very optimistic),
   "key_claims": [list of 2-4 specific factual claims made]
-}
+}}
 
 Return only valid JSON. No preamble, no explanation, no markdown.

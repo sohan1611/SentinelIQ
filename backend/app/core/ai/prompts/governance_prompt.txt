@@ -12,8 +12,8 @@ Headlines and excerpts:
 {news_text}
 
 For each event found, return JSON:
-{ "event_type": str, "event_date_approx": str,
-  "severity": "moderate"|"high"|"severe", "description": str }
+{{ "event_type": str, "event_date_approx": str,
+  "severity": "moderate"|"high"|"severe", "description": str }}
 
 Return only a valid JSON array. No preamble, no explanation.
 If no events found, return an empty array: []
