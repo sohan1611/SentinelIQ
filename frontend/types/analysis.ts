@@ -86,6 +86,8 @@ export interface ModuleScores {
 }
 
 export interface ModuleDetails {
+  /** 0 = legacy row (pre-Phase-15, schema_version key absent); 1 = current typed shape */
+  schema_version?: number;
   scores?: ModuleScores;
   confidence?: "low" | "medium" | "high";
   revenue?: {

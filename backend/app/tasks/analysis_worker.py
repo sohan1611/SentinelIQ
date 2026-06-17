@@ -22,6 +22,7 @@ from app.core.narrative.consistency_engine import ConsistencyEngine
 from app.core.scoring.fraud_scorer import FraudScorer
 from app.core.ai.report_generator import ReportGenerator
 from app.logging_config import CorrelationLoggerAdapter
+from app.schemas.analysis import ModuleDetails, CURRENT_SCHEMA_VERSION
 
 logger = logging.getLogger(__name__)
 
@@ -192,7 +193,8 @@ async def _stage_score_persist(ctx: StageContext):
         ctx.analysis.earnings_score = ctx.scores.get("earnings")
         ctx.analysis.narrative_score = ctx.scores.get("narrative")
         ctx.analysis.news_score = ctx.scores.get("news")
-        ctx.analysis.module_details = {
+        ctx.analysis.module_details = ModuleDetails.model_validate({
+            "schema_version": CURRENT_SCHEMA_VERSION,
             "scores": {k: v for k, v in ctx.scores.items() if v is not None},
             "confidence": confidence,
             "revenue": ctx.forensics_details.get("revenue", {}),
@@ -210,7 +212,7 @@ async def _stage_score_persist(ctx: StageContext):
                 "low_confidence": ctx.governance_provenance.get("low_confidence", False),
                 "flags": ctx.governance_flags,
             },
-        }
+        }).model_dump()
         await ctx.session.commit()
     except Exception as e:
         ctx.log.error(f"Stage score_persist failed: {e}", extra={"stage": "score_persist"})
