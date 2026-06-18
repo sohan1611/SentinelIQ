@@ -88,54 +88,63 @@ export default function RegisterPage() {
         <form onSubmit={handleSubmit} className="flex flex-col gap-[20px]">
 
           <div className="flex flex-col">
-            <label className="font-sans text-[12px] font-semibold text-[#1A1A18] mb-[6px]">
+            <label htmlFor="reg-name" className="font-sans text-[12px] font-semibold text-[#1A1A18] mb-[6px]">
               Full Name
             </label>
             <input
+              id="reg-name"
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               disabled={isLoading}
               placeholder="Jane Smith"
+              aria-invalid={!!fieldErrors.name}
+              aria-describedby={fieldErrors.name ? "reg-name-error" : undefined}
               className={`h-[44px] px-3 font-sans text-[14px] text-[#1A1A18] placeholder:text-[#B0ADA7] bg-[#FFFFFF] border rounded-[6px] outline-none transition-colors disabled:bg-[#F6F4EF] ${
                 fieldErrors.name ? "border-[#B03028]" : "border-[#E3DFD8] focus:border-[#1C3558]"
               }`}
             />
             {fieldErrors.name && (
-              <span className="font-sans text-[12px] text-[#B03028] mt-[4px]">{fieldErrors.name}</span>
+              <span id="reg-name-error" className="font-sans text-[12px] text-[#B03028] mt-[4px]">{fieldErrors.name}</span>
             )}
           </div>
 
           <div className="flex flex-col">
-            <label className="font-sans text-[12px] font-semibold text-[#1A1A18] mb-[6px]">
+            <label htmlFor="reg-email" className="font-sans text-[12px] font-semibold text-[#1A1A18] mb-[6px]">
               Work Email
             </label>
             <input
+              id="reg-email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               disabled={isLoading}
               placeholder="you@firm.com"
+              aria-invalid={!!fieldErrors.email}
+              aria-describedby={fieldErrors.email ? "reg-email-error" : undefined}
               className={`h-[44px] px-3 font-sans text-[14px] text-[#1A1A18] placeholder:text-[#B0ADA7] bg-[#FFFFFF] border rounded-[6px] outline-none transition-colors disabled:bg-[#F6F4EF] ${
                 fieldErrors.email ? "border-[#B03028]" : "border-[#E3DFD8] focus:border-[#1C3558]"
               }`}
             />
             {fieldErrors.email && (
-              <span className="font-sans text-[12px] text-[#B03028] mt-[4px]">{fieldErrors.email}</span>
+              <span id="reg-email-error" className="font-sans text-[12px] text-[#B03028] mt-[4px]">{fieldErrors.email}</span>
             )}
           </div>
 
           <div className="flex flex-col">
-            <label className="font-sans text-[12px] font-semibold text-[#1A1A18] mb-[6px]">
+            <label htmlFor="reg-password" className="font-sans text-[12px] font-semibold text-[#1A1A18] mb-[6px]">
               Password
             </label>
             <div className="relative">
               <input
+                id="reg-password"
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={isLoading}
                 placeholder="Min. 8 characters"
+                aria-invalid={!!fieldErrors.password}
+                aria-describedby={fieldErrors.password ? "reg-password-error" : undefined}
                 className={`w-full h-[44px] pl-3 pr-12 font-sans text-[14px] text-[#1A1A18] placeholder:text-[#B0ADA7] bg-[#FFFFFF] border rounded-[6px] outline-none transition-colors duration-fast ease-out disabled:bg-[#F6F4EF] ${!showPassword ? 'tracking-widest' : ''} ${
                   fieldErrors.password ? "border-[#B03028]" : "border-[#E3DFD8] focus:border-[#1C3558]"
                 }`}
@@ -149,21 +158,24 @@ export default function RegisterPage() {
               </button>
             </div>
             {fieldErrors.password && (
-              <span className="font-sans text-[12px] text-[#B03028] mt-[4px] tracking-normal transition-all duration-fast ease-out">{fieldErrors.password}</span>
+              <span id="reg-password-error" className="font-sans text-[12px] text-[#B03028] mt-[4px] tracking-normal transition-all duration-fast ease-out">{fieldErrors.password}</span>
             )}
           </div>
 
           <div className="flex flex-col">
-            <label className="font-sans text-[12px] font-semibold text-[#1A1A18] mb-[6px]">
+            <label htmlFor="reg-confirm" className="font-sans text-[12px] font-semibold text-[#1A1A18] mb-[6px]">
               Confirm Password
             </label>
             <div className="relative">
               <input
+                id="reg-confirm"
                 type={showConfirm ? "text" : "password"}
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
                 disabled={isLoading}
                 placeholder="Repeat password"
+                aria-invalid={!!fieldErrors.confirm}
+                aria-describedby={fieldErrors.confirm ? "reg-confirm-error" : undefined}
                 className={`w-full h-[44px] pl-3 pr-12 font-sans text-[14px] text-[#1A1A18] placeholder:text-[#B0ADA7] bg-[#FFFFFF] border rounded-[6px] outline-none transition-colors duration-fast ease-out disabled:bg-[#F6F4EF] ${!showConfirm ? 'tracking-widest' : ''} ${
                   fieldErrors.confirm ? "border-[#B03028]" : "border-[#E3DFD8] focus:border-[#1C3558]"
                 }`}
@@ -177,7 +189,7 @@ export default function RegisterPage() {
               </button>
             </div>
             {fieldErrors.confirm && (
-              <span className="font-sans text-[12px] text-[#B03028] mt-[4px] tracking-normal transition-all duration-fast ease-out">{fieldErrors.confirm}</span>
+              <span id="reg-confirm-error" className="font-sans text-[12px] text-[#B03028] mt-[4px] tracking-normal transition-all duration-fast ease-out">{fieldErrors.confirm}</span>
             )}
           </div>
 
@@ -190,20 +202,21 @@ export default function RegisterPage() {
                   checked={agreed}
                   onChange={(e) => setAgreed(e.target.checked)}
                   disabled={isLoading}
+                  aria-describedby={fieldErrors.terms ? "reg-terms-error" : undefined}
                   className="w-4 h-4 bg-[#FFFFFF] border-[#E3DFD8] rounded-[4px] accent-[#1C3558] cursor-pointer disabled:cursor-not-allowed"
                 />
               </div>
-              <div className="ml-3 font-sans text-[12px] text-[#7A786F]">
+              <label htmlFor="terms" className="ml-3 font-sans text-[12px] text-[#7A786F] cursor-pointer">
                 I agree to the <Link href="#" className="text-[#1C3558]">Terms of Service</Link> and <Link href="#" className="text-[#1C3558]">Privacy Policy</Link>.
-              </div>
+              </label>
             </div>
             {fieldErrors.terms && (
-              <span className="font-sans text-[12px] text-[#B03028] mt-[4px]">{fieldErrors.terms}</span>
+              <span id="reg-terms-error" className="font-sans text-[12px] text-[#B03028] mt-[4px]">{fieldErrors.terms}</span>
             )}
           </div>
 
           {errorMessage && (
-            <span className="font-sans text-[12px] text-[#B03028]">{errorMessage}</span>
+            <span role="alert" className="font-sans text-[12px] text-[#B03028]">{errorMessage}</span>
           )}
 
           <Button

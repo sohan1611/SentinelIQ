@@ -19,6 +19,7 @@ export interface DataTableProps<T> {
   skeletonRows?: number;
   emptyState?: React.ReactNode;
   className?: string;
+  ariaLabel?: string;
 }
 
 const ALIGN_CLASS: Record<NonNullable<DataTableColumn<unknown>["align"]>, string> = {
@@ -36,15 +37,17 @@ export function DataTable<T>({
   skeletonRows = 5,
   emptyState,
   className = "",
+  ariaLabel,
 }: DataTableProps<T>) {
   return (
     <div className={`bg-surface border border-border rounded-card overflow-hidden ${className}`}>
-      <table className="w-full text-left border-collapse">
+      <table aria-label={ariaLabel} className="w-full text-left border-collapse">
         <thead>
           <tr className="border-b border-border">
             {columns.map((col) => (
               <th
                 key={col.key}
+                scope="col"
                 style={{ width: col.width }}
                 className={`py-3 px-4 font-sans text-2xs font-medium uppercase tracking-[0.08em] text-text-secondary ${ALIGN_CLASS[col.align ?? "left"]}`}
               >
