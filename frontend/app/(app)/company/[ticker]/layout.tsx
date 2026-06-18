@@ -211,7 +211,11 @@ export default function CompanyLayout({
           Algorithmic screening signal only. Not investment advice and not an accusation.
         </p>
         <div className="flex items-center gap-3 font-sans text-[11px] text-[#B0ADA7]">
-          <Link href="/terms" className="hover:text-[#7A786F] transition-colors">Terms of Service</Link>
+          <Link href="/methodology" className="hover:text-[#7A786F] transition-colors">How scores are calculated</Link>
+          <span>·</span>
+          <Link href="/data-sources" className="hover:text-[#7A786F] transition-colors">Data sources</Link>
+          <span>·</span>
+          <Link href="/terms" className="hover:text-[#7A786F] transition-colors">Terms</Link>
           <span>·</span>
           <Link href="/privacy" className="hover:text-[#7A786F] transition-colors">Privacy</Link>
         </div>

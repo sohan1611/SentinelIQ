@@ -12,7 +12,7 @@ export function Footer() {
           <div className="flex items-center gap-3">
             <Link href="#how-it-works" className="hover:text-text-primary transition-colors">How It Works</Link>
             <span className="text-border hidden md:inline">·</span>
-            <Link href="#methodology" className="hover:text-text-primary transition-colors">Methodology</Link>
+            <Link href="/methodology" className="hover:text-text-primary transition-colors">Methodology</Link>
             <span className="text-border hidden md:inline">·</span>
             <Link href="#case-studies" className="hover:text-text-primary transition-colors">Case Studies</Link>
           </div>
