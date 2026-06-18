@@ -206,10 +206,15 @@ export default function CompanyLayout({
         </CompanyContext.Provider>
       </div>
 
-      <div className="w-full border-t border-[#E3DFD8] mt-10 pt-4 pb-2">
+      <div className="w-full border-t border-[#E3DFD8] mt-10 pt-4 pb-2 flex flex-col items-center gap-1">
         <p className="font-sans text-[11px] text-[#B0ADA7] text-center">
           Algorithmic screening signal only. Not investment advice and not an accusation.
         </p>
+        <div className="flex items-center gap-3 font-sans text-[11px] text-[#B0ADA7]">
+          <Link href="/terms" className="hover:text-[#7A786F] transition-colors">Terms of Service</Link>
+          <span>·</span>
+          <Link href="/privacy" className="hover:text-[#7A786F] transition-colors">Privacy</Link>
+        </div>
       </div>
     </div>
   );
