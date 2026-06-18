@@ -6,6 +6,18 @@ the step-by-step playbook for the one-time setup. Per ADR-012, creating the Rend
 projects, connecting the GitHub repo, and entering secrets are **owner-in-the-loop
 actions** — Claude Code does not perform these.
 
+## Live deployment (Phase 20, 2026-06-18)
+
+| Service | URL |
+|---|---|
+| Backend (Render) | `https://sentineliq-y27m.onrender.com` |
+| Frontend (Vercel) | `https://frontend-sohanmandal1611-7709s-projects.vercel.app` |
+
+Health check verified: `{"status":"ok","database":"ok"}`.
+
+**CORS requirement:** Render env var `FRONTEND_URL` must be set to the exact Vercel URL
+above (no trailing slash). Update it whenever the Vercel domain changes.
+
 ## Local dry-run (already verified, Phase 10 Step 5)
 
 Before following the steps below, the following were verified locally and require no
