@@ -113,6 +113,7 @@ export interface ModuleDetails {
     low_confidence?: boolean;
     flags?: GovernanceFlagDetail[];
   };
+  financial_data_status?: string | null;
 }
 
 export interface AnalysisResult {

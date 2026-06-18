@@ -197,7 +197,9 @@ export default function CompanyOverviewPage({ params }: { params: { ticker: stri
                 )}
                 {isFinanciallyBlind && (
                   <p className="font-sans text-[11px] text-[#7A786F] text-center leading-[1.5] max-w-[220px] uppercase tracking-[0.05em]">
-                    Financial data unavailable — score reflects governance and news signals only
+                    {analysis.module_details?.financial_data_status === "rate_limited"
+                      ? "Financial data temporarily unavailable — please retry. Score reflects governance and news signals only"
+                      : "Financial data unavailable — score reflects governance and news signals only"}
                   </p>
                 )}
               </div>

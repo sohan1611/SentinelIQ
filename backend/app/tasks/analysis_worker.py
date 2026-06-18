@@ -52,6 +52,7 @@ class StageContext:
     narrative_tone_shifts: list = field(default_factory=list)
     governance_provenance: dict = field(default_factory=dict)
     governance_flags: list = field(default_factory=list)
+    financial_data_status: str = "ok"
 
 
 @dataclass
@@ -70,7 +71,13 @@ async def _stage_financials(ctx: StageContext):
             ctx.financial_records.append(fd)
         await ctx.session.commit()
     except Exception as e:
-        ctx.log.error(f"Stage financials failed: {e}", extra={"stage": "financials"})
+        status_code = getattr(e, "status_code", None)
+        if status_code == 503:
+            ctx.financial_data_status = "rate_limited"
+            ctx.log.warning(f"Stage financials: Yahoo Finance rate-limited (503)", extra={"stage": "financials"})
+        else:
+            ctx.financial_data_status = "unavailable"
+            ctx.log.error(f"Stage financials failed: {e}", extra={"stage": "financials"})
         await ctx.session.rollback()
 
 
@@ -212,6 +219,7 @@ async def _stage_score_persist(ctx: StageContext):
                 "low_confidence": ctx.governance_provenance.get("low_confidence", False),
                 "flags": ctx.governance_flags,
             },
+            "financial_data_status": ctx.financial_data_status if ctx.financial_data_status != "ok" else None,
         }).model_dump()
         await ctx.session.commit()
     except Exception as e:

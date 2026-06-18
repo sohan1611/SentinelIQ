@@ -68,7 +68,15 @@ async def fetch_financials(ticker: str) -> list[dict]:
             cf = t.cashflow
 
             if inc.empty and bs.empty and cf.empty:
-                raise HTTPException(status_code=404, detail="No financial data available for this ticker.")
+                # All sheets empty from a known-valid ticker most likely indicates a
+                # transient rate-limit (HTTP 429) rather than genuine no-data. The
+                # Company record was already validated by fetch_company_info so the
+                # ticker is real. Raise 503 (retriable) not 404 (permanent no-data).
+                raise HTTPException(
+                    status_code=503,
+                    detail="FINANCIAL_DATA_UNAVAILABLE",
+                    headers={"Retry-After": "120"},
+                )
 
             periods = set()
             for df in [inc, bs, cf]:
@@ -117,8 +125,21 @@ async def fetch_financials(ticker: str) -> list[dict]:
         except Exception as e:
             if isinstance(e, HTTPException):
                 raise e
+            # Detect Yahoo Finance 429 / rate-limit. yfinance surfaces these as
+            # various exception types (requests.HTTPError, curl_cffi errors, etc.)
+            # with the status code or phrase in the message string.
+            err_str = str(e).lower()
+            if any(kw in err_str for kw in ("429", "too many requests", "rate limit", "rate-limit", "ratelimit")):
+                raise HTTPException(
+                    status_code=503,
+                    detail="FINANCIAL_DATA_UNAVAILABLE",
+                    headers={"Retry-After": "120"},
+                )
             raise HTTPException(status_code=404, detail="No financial data available for this ticker.")
 
-    data = await asyncio.wait_for(asyncio.to_thread(_fetch), timeout=YFINANCE_TIMEOUT_SECONDS)
+    try:
+        data = await asyncio.wait_for(asyncio.to_thread(_fetch), timeout=YFINANCE_TIMEOUT_SECONDS)
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=503, detail="Financial data timed out. Please try again.")
     cache.set(cache_key, data, ttl_seconds=43200)
     return data

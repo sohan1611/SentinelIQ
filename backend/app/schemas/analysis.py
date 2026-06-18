@@ -120,6 +120,7 @@ class ModuleDetails(BaseModel):
     debt: DebtModuleDetails = DebtModuleDetails()
     narrative: NarrativeModuleDetails = NarrativeModuleDetails()
     governance: GovernanceModuleDetails = GovernanceModuleDetails()
+    financial_data_status: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
