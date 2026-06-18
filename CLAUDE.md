@@ -211,6 +211,35 @@ Amendments are explicit and dated — never silent behavioral changes inside a f
 > text response received). CLAUDE.md tech stack table, Phase 3 amendment `model_id` pin,
 > and Phase 11 Step 2 amendment UI display string updated to match.
 
+> **Phase 22 amendment (2026-06-18):** Legal pages + methodology transparency layer.
+> Four new public routes (no auth required, under `(marketing)` layout):
+> - `frontend/app/(marketing)/terms/page.tsx` → `/terms` — Terms of Service (9 sections:
+>   what it is, no investment advice, not an accusation, data sources, permitted use,
+>   free-tier limits, liability, changes, contact). Owner must review wording before
+>   opening to external users.
+> - `frontend/app/(marketing)/privacy/page.tsx` → `/privacy` — Privacy Policy (9 sections:
+>   overview, what's collected, what's not collected, third-party services, retention,
+>   rights, security, changes, contact). No analytics, no tracking cookies, no payment data.
+> - `frontend/app/(marketing)/methodology/page.tsx` → `/methodology` — Scoring Methodology
+>   (7 sections: module table, weight vector, renormalization rule, confidence tiers,
+>   all 4 forensic module formulas, AI modules, narrative exclusion rationale). All formulas
+>   taken directly from the live implementation.
+> - `frontend/app/(marketing)/data-sources/page.tsx` → `/data-sources` — Data Sources
+>   (5 sections: yfinance/restated limitation with amber callout, RSS feeds, Gemini
+>   grounding check, what's not used, summary table). Fulfills ADR-005 #7 ("Honest
+>   Provenance") in the product UI.
+>
+> **Company layout disclaimer** (`frontend/app/(app)/company/[ticker]/layout.tsx`) now
+> includes four links below the "Algorithmic screening signal only" text:
+> "How scores are calculated" → `/methodology`, "Data sources" → `/data-sources`,
+> "Terms" → `/terms`, "Privacy" → `/privacy`.
+>
+> **Footer** (`frontend/components/layout/Footer.tsx`): `#methodology` anchor updated to
+> `/methodology` (now links to the real page instead of a landing-page anchor).
+>
+> **Analytics decision (Step 4):** no third-party analytics — confirmed by owner.
+> Privacy Policy section 3 ("What we do not collect") reflects this accurately.
+
 ---
 
 ## Git Commit Identity — MANDATORY
