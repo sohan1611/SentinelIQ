@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useEffect, useState } from "react";
 import { Skeleton } from "../ui/Skeleton";
+import { useReducedMotion } from "@/lib/hooks/useReducedMotion";
 
 interface IntegrityGaugeProps {
   score: number;
@@ -23,12 +24,20 @@ export function IntegrityScoreGauge({ score, lastAnalyzed, loading, startAnimati
   const [currentScore, setCurrentScore] = useState(0);
   const [isDone, setIsDone] = useState(false);
   const [arcProgress, setArcProgress] = useState(0);
+  const reducedMotion = useReducedMotion();
 
   useEffect(() => {
     if (!startAnimation) {
       setCurrentScore(0);
       setArcProgress(0);
       setIsDone(false);
+      return;
+    }
+
+    if (reducedMotion) {
+      setCurrentScore(score);
+      setArcProgress(score);
+      setIsDone(true);
       return;
     }
 
@@ -57,7 +66,7 @@ export function IntegrityScoreGauge({ score, lastAnalyzed, loading, startAnimati
 
     req = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(req);
-  }, [score, startAnimation]);
+  }, [score, startAnimation, reducedMotion]);
 
   const risk = getRiskDetails(score);
 
