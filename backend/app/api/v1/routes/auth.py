@@ -9,6 +9,7 @@ import bcrypt
 from jose import jwt
 
 from app.api.deps import get_db, get_current_user
+from app.api.middleware.rate_limit import rate_limit
 from app.config import settings
 from app.models.user import User
 from app.schemas.user import UserCreate, UserResponse, Token
@@ -27,7 +28,7 @@ def create_access_token(subject: str | Any, expires_delta: timedelta) -> str:
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm="HS256")
     return encoded_jwt
 
-@router.post("/register", response_model=Token)
+@router.post("/register", response_model=Token, dependencies=[Depends(rate_limit("register", 5))])
 async def register(user_in: UserCreate, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.email == user_in.email))
     user = result.scalars().first()
@@ -51,7 +52,7 @@ async def register(user_in: UserCreate, db: AsyncSession = Depends(get_db)):
         "token_type": "bearer",
     }
 
-@router.post("/login", response_model=Token)
+@router.post("/login", response_model=Token, dependencies=[Depends(rate_limit("login", 10))])
 async def login(db: AsyncSession = Depends(get_db), form_data: OAuth2PasswordRequestForm = Depends()):
     result = await db.execute(select(User).where(User.email == form_data.username))
     user = result.scalars().first()

@@ -6,6 +6,7 @@ from sqlalchemy.future import select
 from sqlalchemy import func
 
 from app.api.deps import get_db, get_current_user
+from app.api.middleware.rate_limit import rate_limit
 from app.models.user import User
 from app.models.company import Company
 from app.models.analysis_result import AnalysisResult
@@ -35,7 +36,7 @@ def _free_tier_usage_query(user_id, since):
     )
 
 
-@router.post("/run", response_model=AnalysisRunResponse)
+@router.post("/run", response_model=AnalysisRunResponse, dependencies=[Depends(rate_limit("analysis_run", 20))])
 async def run_analysis(
     request: AnalysisRunRequest,
     background_tasks: BackgroundTasks,
