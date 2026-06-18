@@ -21,19 +21,25 @@ interface CommandPaletteProps {
 export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const previousFocus = useRef<HTMLElement | null>(null);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Company[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [isSearching, setIsSearching] = useState(false);
   const debouncedQuery = useDebounce(query, 220);
 
-  // Focus input on open
+  // Capture focus before opening; restore on close
   useEffect(() => {
     if (isOpen) {
+      previousFocus.current = document.activeElement as HTMLElement;
       setQuery("");
       setResults([]);
       setActiveIndex(0);
       setTimeout(() => inputRef.current?.focus(), 10);
+    } else if (previousFocus.current) {
+      previousFocus.current.focus?.();
+      previousFocus.current = null;
     }
   }, [isOpen]);
 
@@ -71,12 +77,33 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
     router.push(href);
   }, [router, onClose]);
 
-  // Keyboard navigation
+  // Keyboard navigation + focus trap
   useEffect(() => {
     if (!isOpen) return;
     const handle = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         onClose();
+      } else if (e.key === "Tab") {
+        // Focus trap: cycle within dialog
+        const focusable = Array.from(
+          dialogRef.current?.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), input:not([disabled])'
+          ) ?? []
+        );
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey) {
+          if (document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
       } else if (e.key === "ArrowDown") {
         e.preventDefault();
         setActiveIndex((i) => Math.min(i + 1, items.length - 1));
@@ -99,10 +126,14 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
       onClick={onClose}
     >
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-[#1A1A18]/20" />
+      <div className="absolute inset-0 bg-[#1A1A18]/20" aria-hidden="true" />
 
-      {/* Palette card */}
+      {/* Palette card — dialog landmark */}
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Command palette"
         className="relative w-full max-w-[560px] mx-4 bg-[#FFFFFF] border border-[#E3DFD8] rounded-[8px] overflow-hidden"
         style={{
           animation: "paletteIn 150ms cubic-bezier(0.0, 0.0, 0.2, 1.0) both",
@@ -111,40 +142,57 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
       >
         {/* Search input */}
         <div className="flex items-center border-b border-[#E3DFD8] px-4 h-[52px] gap-3">
-          <span className="font-sans text-[13px] text-[#B0ADA7] shrink-0">Search</span>
+          <span className="font-sans text-[13px] text-[#B0ADA7] shrink-0" aria-hidden="true">Search</span>
           <input
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Company name or ticker..."
+            role="combobox"
+            aria-expanded={items.length > 0}
+            aria-haspopup="listbox"
+            aria-autocomplete="list"
+            aria-controls="palette-listbox"
+            aria-activedescendant={
+              items.length > 0 ? `palette-option-${activeIndex}` : undefined
+            }
+            aria-label="Search companies or navigate"
             className="flex-1 bg-transparent font-sans text-[14px] text-[#1A1A18] placeholder:text-[#B0ADA7] outline-none"
           />
           {isSearching && (
-            <span className="font-sans text-[11px] text-[#B0ADA7] shrink-0">...</span>
+            <span className="font-sans text-[11px] text-[#B0ADA7] shrink-0" aria-live="polite" aria-label="Searching">...</span>
           )}
-          <kbd className="font-mono text-[10px] text-[#B0ADA7] border border-[#E3DFD8] rounded px-1.5 py-0.5 shrink-0">Esc</kbd>
+          <kbd className="font-mono text-[10px] text-[#B0ADA7] border border-[#E3DFD8] rounded px-1.5 py-0.5 shrink-0" aria-label="Press Escape to close">Esc</kbd>
         </div>
 
         {/* Results / Nav items */}
         {items.length > 0 && (
-          <ul className="py-1 max-h-[320px] overflow-y-auto">
+          <ul
+            id="palette-listbox"
+            role="listbox"
+            aria-label={query.trim() ? "Search results" : "Navigation"}
+            className="py-1 max-h-[320px] overflow-y-auto"
+          >
             {query.trim() && (
-              <li className="px-4 py-2">
-                <span className="font-sans text-[10px] font-medium uppercase tracking-[0.07em] text-[#B0ADA7]">
+              <li role="presentation" className="px-4 py-2">
+                <span className="font-sans text-[10px] font-medium uppercase tracking-[0.07em] text-[#B0ADA7]" aria-hidden="true">
                   Companies
                 </span>
               </li>
             )}
             {!query.trim() && (
-              <li className="px-4 py-2">
-                <span className="font-sans text-[10px] font-medium uppercase tracking-[0.07em] text-[#B0ADA7]">
+              <li role="presentation" className="px-4 py-2">
+                <span className="font-sans text-[10px] font-medium uppercase tracking-[0.07em] text-[#B0ADA7]" aria-hidden="true">
                   Navigation
                 </span>
               </li>
             )}
             {items.map((item, i) => (
-              <li key={item.href}>
+              <li key={item.href} role="presentation">
                 <button
+                  id={`palette-option-${i}`}
+                  role="option"
+                  aria-selected={i === activeIndex}
                   className={`w-full flex items-center justify-between px-4 py-2.5 text-left transition-colors ${
                     i === activeIndex ? "bg-[#F6F4EF]" : "hover:bg-[#F6F4EF]"
                   }`}
@@ -162,7 +210,7 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
         )}
 
         {query.trim() && !isSearching && results.length === 0 && (
-          <div className="px-4 py-6 text-center">
+          <div className="px-4 py-6 text-center" role="status" aria-live="polite">
             <span className="font-sans text-[13px] text-[#B0ADA7]">
               No companies found for &ldquo;{query}&rdquo;
             </span>
