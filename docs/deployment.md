@@ -11,12 +11,16 @@ actions** — Claude Code does not perform these.
 | Service | URL |
 |---|---|
 | Backend (Render) | `https://sentineliq-y27m.onrender.com` |
-| Frontend (Vercel) | `https://frontend-sohanmandal1611-7709s-projects.vercel.app` |
+| Frontend (Vercel) | `https://sentineliq-sohanmandal1611-7709s-projects.vercel.app` |
 
 Health check verified: `{"status":"ok","database":"ok"}`.
 
 **CORS requirement:** Render env var `FRONTEND_URL` must be set to the exact Vercel URL
 above (no trailing slash). Update it whenever the Vercel domain changes.
+
+Note: `sentineliq.vercel.app` is taken by another user. The project was renamed from
+"frontend" to "sentineliq" — the stable URL above is the cleanest available under
+the `.vercel.app` subdomain namespace without a custom domain.
 
 ## Local dry-run (already verified, Phase 10 Step 5)
 
