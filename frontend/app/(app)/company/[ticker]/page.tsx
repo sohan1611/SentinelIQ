@@ -306,6 +306,8 @@ export default function CompanyOverviewPage({ params }: { params: { ticker: stri
                         description={flag.description}
                         type={flag.flag_type.replace(/_/g, " ")}
                         evidence={getFlagEvidence(flag, analysis.module_details)}
+                        analysisId={analysis.id}
+                        flagId={flag.id}
                       />
                     ))}
                   </div>
