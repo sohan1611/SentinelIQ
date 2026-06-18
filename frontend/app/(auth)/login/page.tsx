@@ -17,7 +17,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("Incorrect email or password.");
+  const [errorMessage, setErrorMessage] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,7 +60,7 @@ export default function LoginPage() {
               id="login-email"
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => { setEmail(e.target.value); if (state === "error") setState("default"); }}
               disabled={isLoading}
               placeholder="you@firm.com"
               aria-invalid={isError}
@@ -87,7 +87,7 @@ export default function LoginPage() {
                 id="login-password"
                 type={showPassword ? "text" : "password"}
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => { setPassword(e.target.value); if (state === "error") setState("default"); }}
                 disabled={isLoading}
                 placeholder="············"
                 aria-invalid={isError}

@@ -149,30 +149,33 @@ export default function CompanyOverviewPage({ params }: { params: { ticker: stri
           <div className="font-sans text-[12px] text-[#7A786F]">{error}</div>
         </div>
       ) : !analysis ? (
-        <div className="w-full bg-[#FFFFFF] border border-[#E3DFD8] rounded-[8px] p-10 flex flex-col items-center text-center">
-          <div className="font-sans text-[10px] font-medium uppercase tracking-[0.08em] text-[#7A786F] mb-3">
-            CORPORATE INTEGRITY SCORE
-          </div>
-          <h2 className="font-sans text-[18px] font-semibold text-[#1A1A18] mb-2">
-            {company?.name ?? ticker} hasn&apos;t been analyzed yet
-          </h2>
-          <p className="font-sans text-[13px] text-[#7A786F] max-w-[420px] mb-6">
-            Run an investigation to generate its Corporate Integrity Score, forensic breakdowns, and red-flag timeline.
-          </p>
-          <Button
-            variant="primary"
-            isLoading={isRunning}
-            loadingText={analysisStatus?.stage ?? "Starting analysis..."}
-            onClick={() => start(ticker)}
-          >
-            Run Analysis
-          </Button>
-          {analysisError && (
-            <div className="font-sans text-[12px] text-[#B03028] mt-4">
-              {analysisError}
+        /* Skeleton covers this branch while loading — only visible when load finishes with no analysis */
+        !isLoading ? (
+          <div className="w-full bg-[#FFFFFF] border border-[#E3DFD8] rounded-[8px] p-10 flex flex-col items-center text-center">
+            <div className="font-sans text-[10px] font-medium uppercase tracking-[0.08em] text-[#7A786F] mb-3">
+              CORPORATE INTEGRITY SCORE
             </div>
-          )}
-        </div>
+            <h2 className="font-sans text-[18px] font-semibold text-[#1A1A18] mb-2">
+              {company?.name ?? ticker} hasn&apos;t been analyzed yet
+            </h2>
+            <p className="font-sans text-[13px] text-[#7A786F] max-w-[420px] mb-6">
+              Run an investigation to generate its Corporate Integrity Score, forensic breakdowns, and red-flag timeline.
+            </p>
+            <Button
+              variant="primary"
+              isLoading={isRunning}
+              loadingText={analysisStatus?.stage ?? "Starting analysis..."}
+              onClick={() => start(ticker)}
+            >
+              Run Analysis
+            </Button>
+            {analysisError && (
+              <div className="font-sans text-[12px] text-[#B03028] mt-4">
+                {analysisError}
+              </div>
+            )}
+          </div>
+        ) : null
       ) : (
         <>
           {/* Left Column - 35% */}

@@ -6,12 +6,28 @@ interface RequestOptions extends Omit<RequestInit, "body"> {
   body?: unknown;
 }
 
+function cleanValidationMessage(msg: string): string {
+  return msg
+    .split("; ")
+    .map(s => {
+      const m = s.match(/^body(?:\.\w+)?:\s*(.+)$/)
+      const cleaned = (m ? m[1] : s).trim()
+      return cleaned.charAt(0).toUpperCase() + cleaned.slice(1)
+    })
+    .filter(Boolean)
+    .join(". ")
+}
+
 function extractError(body: any): { message?: string; code?: string } {
   const detail = body?.detail ?? body?.error
   if (typeof detail === "string") return { message: detail }
   if (detail && typeof detail === "object") {
     const inner = detail.error ?? detail
-    return { message: inner.message, code: inner.code }
+    let message: string | undefined = inner.message
+    if (inner.code === "VALIDATION_ERROR" && message) {
+      message = cleanValidationMessage(message)
+    }
+    return { message, code: inner.code }
   }
   return {}
 }

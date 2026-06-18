@@ -95,7 +95,7 @@ export default function RegisterPage() {
               id="reg-name"
               type="text"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => { setName(e.target.value); if (errorMessage) setErrorMessage(""); }}
               disabled={isLoading}
               placeholder="Jane Smith"
               aria-invalid={!!fieldErrors.name}
@@ -117,7 +117,7 @@ export default function RegisterPage() {
               id="reg-email"
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => { setEmail(e.target.value); if (errorMessage) setErrorMessage(""); }}
               disabled={isLoading}
               placeholder="you@firm.com"
               aria-invalid={!!fieldErrors.email}
@@ -140,7 +140,7 @@ export default function RegisterPage() {
                 id="reg-password"
                 type={showPassword ? "text" : "password"}
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => { setPassword(e.target.value); if (errorMessage) setErrorMessage(""); }}
                 disabled={isLoading}
                 placeholder="Min. 8 characters"
                 aria-invalid={!!fieldErrors.password}
@@ -171,7 +171,7 @@ export default function RegisterPage() {
                 id="reg-confirm"
                 type={showConfirm ? "text" : "password"}
                 value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
+                onChange={(e) => { setConfirm(e.target.value); if (errorMessage) setErrorMessage(""); }}
                 disabled={isLoading}
                 placeholder="Repeat password"
                 aria-invalid={!!fieldErrors.confirm}
