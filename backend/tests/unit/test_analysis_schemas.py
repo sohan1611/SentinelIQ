@@ -9,7 +9,7 @@ Covers:
 - AnalysisHistoryItem omits module_details
 """
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.models.analysis_result import AnalysisResult
 from app.schemas.analysis import (
@@ -107,7 +107,7 @@ def _legacy_module_details():
 def test_schema_version_defaults_to_zero_for_legacy_rows():
     response = AnalysisResultResponse.model_validate(
         AnalysisResult(
-            id=uuid.uuid4(), company_id=uuid.uuid4(), run_at=datetime.utcnow(),
+            id=uuid.uuid4(), company_id=uuid.uuid4(), run_at=datetime.now(timezone.utc),
             module_details=_legacy_module_details(), status="complete",
         )
     )
@@ -117,7 +117,7 @@ def test_schema_version_defaults_to_zero_for_legacy_rows():
 def test_schema_version_is_one_for_current_rows():
     response = AnalysisResultResponse.model_validate(
         AnalysisResult(
-            id=uuid.uuid4(), company_id=uuid.uuid4(), run_at=datetime.utcnow(),
+            id=uuid.uuid4(), company_id=uuid.uuid4(), run_at=datetime.now(timezone.utc),
             module_details=_module_details_v1(), status="complete",
         )
     )
@@ -134,7 +134,7 @@ def test_current_schema_version_constant_is_one():
 
 def test_module_details_round_trips_full_shape():
     analysis = AnalysisResult(
-        id=uuid.uuid4(), company_id=uuid.uuid4(), run_at=datetime.utcnow(),
+        id=uuid.uuid4(), company_id=uuid.uuid4(), run_at=datetime.now(timezone.utc),
         integrity_score=70.2, financial_score=70.0, cashflow_score=72.5,
         governance_score=75.0, earnings_score=100.0, narrative_score=35.0, news_score=65.0,
         module_details=_module_details_v1(), status="complete",
@@ -151,7 +151,7 @@ def test_module_details_round_trips_full_shape():
 def test_typed_forensic_sub_models_round_trip():
     response = AnalysisResultResponse.model_validate(
         AnalysisResult(
-            id=uuid.uuid4(), company_id=uuid.uuid4(), run_at=datetime.utcnow(),
+            id=uuid.uuid4(), company_id=uuid.uuid4(), run_at=datetime.now(timezone.utc),
             module_details=_module_details_v1(), status="complete",
         )
     )
@@ -173,7 +173,7 @@ def test_typed_forensic_sub_models_round_trip():
 def test_narrative_and_governance_sub_models_round_trip():
     response = AnalysisResultResponse.model_validate(
         AnalysisResult(
-            id=uuid.uuid4(), company_id=uuid.uuid4(), run_at=datetime.utcnow(),
+            id=uuid.uuid4(), company_id=uuid.uuid4(), run_at=datetime.now(timezone.utc),
             module_details=_module_details_v1(), status="complete",
         )
     )
@@ -210,7 +210,7 @@ def test_module_details_handles_governance_failure_shape():
 
     response = AnalysisResultResponse.model_validate(
         AnalysisResult(
-            id=uuid.uuid4(), company_id=uuid.uuid4(), run_at=datetime.utcnow(),
+            id=uuid.uuid4(), company_id=uuid.uuid4(), run_at=datetime.now(timezone.utc),
             module_details=details, status="complete",
         )
     )
@@ -224,7 +224,7 @@ def test_module_details_handles_governance_failure_shape():
 def test_module_details_none_for_pending_analysis():
     response = AnalysisResultResponse.model_validate(
         AnalysisResult(
-            id=uuid.uuid4(), company_id=uuid.uuid4(), run_at=datetime.utcnow(), status="pending",
+            id=uuid.uuid4(), company_id=uuid.uuid4(), run_at=datetime.now(timezone.utc), status="pending",
         )
     )
     assert response.module_details is None
@@ -233,7 +233,7 @@ def test_module_details_none_for_pending_analysis():
 def test_analysis_history_item_omits_module_details():
     response = AnalysisHistoryItem.model_validate(
         AnalysisResult(
-            id=uuid.uuid4(), company_id=uuid.uuid4(), run_at=datetime.utcnow(),
+            id=uuid.uuid4(), company_id=uuid.uuid4(), run_at=datetime.now(timezone.utc),
             integrity_score=70.2, financial_score=70.0, cashflow_score=72.5,
             governance_score=75.0, earnings_score=100.0, narrative_score=35.0, news_score=65.0,
             module_details=_module_details_v1(), status="complete",

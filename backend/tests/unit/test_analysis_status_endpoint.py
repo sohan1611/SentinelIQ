@@ -5,7 +5,7 @@ status's "Failed" stage, which is left untouched (Phase 12 cleanup scope).
 """
 
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 
 from app.api.v1.routes.analysis import get_analysis_status
@@ -17,7 +17,7 @@ async def test_get_analysis_status_maps_error_to_analysis_interrupted():
         id=uuid.uuid4(),
         company_id=uuid.uuid4(),
         status="error",
-        run_at=datetime.utcnow() - timedelta(minutes=15),
+        run_at=datetime.now(timezone.utc) - timedelta(minutes=15),
         integrity_score=None,
     )
     db = AsyncMock()
@@ -34,7 +34,7 @@ async def test_get_analysis_status_running_stage_unaffected():
         id=uuid.uuid4(),
         company_id=uuid.uuid4(),
         status="running:forensics",
-        run_at=datetime.utcnow(),
+        run_at=datetime.now(timezone.utc),
         integrity_score=None,
     )
     db = AsyncMock()

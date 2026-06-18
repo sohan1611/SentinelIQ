@@ -2,7 +2,7 @@ import asyncio
 import logging
 import time
 import feedparser
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from app.services import cache
 
 logger = logging.getLogger(__name__)
@@ -64,7 +64,7 @@ async def fetch_news_sentiment(company_name: str, ticker: str) -> float:
 
     def _fetch_extra():
         headlines = []
-        thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+        thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
         for url in extra_feeds:
             try:
                 parsed = feedparser.parse(url)

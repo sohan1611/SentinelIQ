@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.models.analysis_run import AnalysisRun
 from app.schemas.analysis_run import AnalysisRunRecord
@@ -11,7 +11,7 @@ def test_analysis_run_record_round_trips_from_model():
         user_id=uuid.uuid4(),
         company_id=uuid.uuid4(),
         analysis_result_id=uuid.uuid4(),
-        run_at=datetime.utcnow(),
+        run_at=datetime.now(timezone.utc),
         counted=True,
     )
 

@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,7 +31,7 @@ async def reap_stuck_analyses(session: AsyncSession) -> int:
     it does not revive the retired "failed" status (ADR-010 / Phase 3).
     Returns the number of rows updated.
     """
-    cutoff = datetime.utcnow() - timedelta(minutes=STUCK_ANALYSIS_THRESHOLD_MINUTES)
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=STUCK_ANALYSIS_THRESHOLD_MINUTES)
     result = await session.execute(_stuck_analyses_query(cutoff))
     stuck = result.scalars().all()
 

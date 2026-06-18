@@ -6,7 +6,7 @@ retired "failed" status (ADR-010 / Phase 3).
 """
 
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from app.models.analysis_result import AnalysisResult
 from app.tasks.reaper import _stuck_analyses_query, reap_stuck_analyses
@@ -49,7 +49,7 @@ async def test_reap_stuck_analyses_marks_stale_running_rows_as_error():
         id=uuid.uuid4(),
         company_id=uuid.uuid4(),
         status="running:forensics",
-        run_at=datetime.utcnow() - timedelta(minutes=30),
+        run_at=datetime.now(timezone.utc) - timedelta(minutes=30),
     )
     session = FakeSession([stale])
 

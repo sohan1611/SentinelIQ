@@ -6,7 +6,7 @@ the overview page's Integrity Score trend chart.
 """
 
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -32,7 +32,7 @@ def company():
 
 
 async def test_history_returns_chronological_order(company):
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     # DB query is newest-first; the route must reverse this.
     rows = [
         AnalysisResult(id=uuid.uuid4(), company_id=company.id, run_at=now,

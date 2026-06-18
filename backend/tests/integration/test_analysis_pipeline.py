@@ -113,7 +113,7 @@ FINANCIALS = [
 ]
 
 GOV_PROVENANCE = {
-    "model_id": "gemini-1.5-flash",
+    "model_id": "gemini-2.5-flash",
     "prompt": "gov-prompt",
     "raw_response": {
         "finish_reason": "STOP",
@@ -144,8 +144,8 @@ NARRATIVE_RESULT = (
       "description": "Significant tone shift between 2023-01 and 2023-02 (Score diff: 1.40)",
       "period": "2023-02"}],
     [
-        {"period": "2023-01", "model_id": "gemini-1.5-flash", "prompt": "p1", "raw_response": "r1"},
-        {"period": "2023-02", "model_id": "gemini-1.5-flash", "prompt": "p2", "raw_response": "r2"},
+        {"period": "2023-01", "model_id": "gemini-2.5-flash", "prompt": "p1", "raw_response": "r1"},
+        {"period": "2023-02", "model_id": "gemini-2.5-flash", "prompt": "p2", "raw_response": "r2"},
     ],
 )
 

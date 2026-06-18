@@ -1,5 +1,5 @@
 from typing import Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 _cache: dict = {}
 
@@ -7,7 +7,7 @@ def get(key: str) -> Any | None:
     entry = _cache.get(key)
     if not entry:
         return None
-    if datetime.utcnow() > entry["expires"]:
+    if datetime.now(timezone.utc) > entry["expires"]:
         del _cache[key]
         return None
     return entry["value"]
@@ -15,5 +15,5 @@ def get(key: str) -> Any | None:
 def set(key: str, value: Any, ttl_seconds: int = 3600):
     _cache[key] = {
         "value": value,
-        "expires": datetime.utcnow() + timedelta(seconds=ttl_seconds)
+        "expires": datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds)
     }

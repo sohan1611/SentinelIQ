@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -44,7 +44,7 @@ async def run_analysis(
 ):
     ticker = request.ticker.upper()
 
-    first_day_of_month = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    first_day_of_month = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     count_res = await db.execute(_free_tier_usage_query(current_user.id, first_day_of_month))
     count = count_res.scalar() or 0
 
@@ -65,7 +65,7 @@ async def run_analysis(
         .where(
             AnalysisResult.company_id == company.id,
             AnalysisResult.status == "complete",
-            AnalysisResult.run_at >= datetime.utcnow() - ANALYSIS_CACHE_TTL,
+            AnalysisResult.run_at >= datetime.now(timezone.utc) - ANALYSIS_CACHE_TTL,
         )
         .order_by(AnalysisResult.run_at.desc())
         .limit(1)
@@ -104,7 +104,7 @@ async def get_analysis_status(analysis_id: str, db: AsyncSession = Depends(get_d
     if not analysis:
         raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Analysis not found"}})
 
-    elapsed = int((datetime.utcnow() - analysis.run_at).total_seconds())
+    elapsed = int((datetime.now(timezone.utc) - analysis.run_at).total_seconds())
 
     stage = "Initializing..."
     if analysis.status.startswith("running:"):

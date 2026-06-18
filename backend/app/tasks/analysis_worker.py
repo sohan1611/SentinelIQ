@@ -2,7 +2,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Awaitable, Callable
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -157,7 +157,7 @@ async def _stage_narrative(ctx: StageContext):
         ctx.narrative_provenance = provenance
 
         for s in snaps:
-            sn = NarrativeSnapshot(company_id=ctx.company_id, fetched_at=datetime.utcnow(), **s)
+            sn = NarrativeSnapshot(company_id=ctx.company_id, fetched_at=datetime.now(timezone.utc), **s)
             ctx.session.add(sn)
             ctx.narrative_snapshots.append(sn)
 
@@ -283,6 +283,6 @@ async def run_full_analysis(company_id: UUID, analysis_id: UUID):
                     pass
 
         analysis.status = "complete"
-        company.last_analyzed = datetime.utcnow()
+        company.last_analyzed = datetime.now(timezone.utc)
         await session.commit()
         log.info("analysis complete")
