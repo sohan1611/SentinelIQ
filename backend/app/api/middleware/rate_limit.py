@@ -40,6 +40,7 @@ def rate_limit(key: str, limit: int, window_secs: int = _WINDOW_SECS) -> Callabl
         _windows[bucket] = pruned
 
         if len(pruned) >= limit:
+            retry_after = max(1, int(pruned[0] + window_secs - now) + 1)
             raise HTTPException(
                 status_code=429,
                 detail={
@@ -48,6 +49,7 @@ def rate_limit(key: str, limit: int, window_secs: int = _WINDOW_SECS) -> Callabl
                         "message": f"Too many requests. Limit is {limit} per {window_secs}s.",
                     }
                 },
+                headers={"Retry-After": str(retry_after)},
             )
 
         _windows[bucket].append(now)

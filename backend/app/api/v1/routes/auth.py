@@ -35,7 +35,7 @@ async def register(user_in: UserCreate, db: AsyncSession = Depends(get_db)):
     if user:
         raise HTTPException(
             status_code=400,
-            detail="The user with this email already exists in the system",
+            detail="Registration unavailable for this email address.",
         )
     user = User(
         email=user_in.email,
