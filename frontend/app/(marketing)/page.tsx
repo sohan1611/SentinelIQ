@@ -16,7 +16,7 @@ export default function LandingPage() {
         </h1>
         
         <p className="font-sans text-[15px] md:text-[18px] text-text-secondary leading-[1.65] max-w-[560px] mb-10 md:mb-12">
-          SentinelIQ analyzes financial statements, management language, and governance behavior to surface early warning signs of corporate fraud — before they become public knowledge.
+          SentinelIQ analyzes financial statements, public governance disclosures, and news coverage to surface early warning signs of corporate fraud — before they become public knowledge.
         </p>
 
         <div className="w-full max-w-[640px] mb-4">
@@ -24,7 +24,7 @@ export default function LandingPage() {
         </div>
         
         <div className="font-sans text-[11px] md:text-[12px] text-text-muted">
-          No account required for a preview. Analyzed 2,400+ public companies.
+          No account required for a preview.
         </div>
       </section>
 
@@ -70,7 +70,7 @@ export default function LandingPage() {
               Executives who change their story always leave a record.
             </h3>
             <p className="font-sans text-[14px] text-text-secondary leading-[1.7]">
-              Our AI cross-references earnings call transcripts quarter by quarter, surfacing contradictions, tone shifts, and the creeping vagueness that appears long before a restatement is filed.
+              Our AI reviews public news coverage over time, surfacing contradictions, tone shifts, and the creeping vagueness that appears in company statements long before a restatement is filed.
             </p>
           </div>
 

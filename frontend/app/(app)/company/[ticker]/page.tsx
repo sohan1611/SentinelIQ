@@ -92,6 +92,16 @@ export default function CompanyOverviewPage({ params }: { params: { ticker: stri
 
   const confidence = analysis?.module_details?.confidence;
 
+  const isFinanciallyBlind =
+    confidence === "low" &&
+    analysis?.financial_score == null &&
+    analysis?.cashflow_score == null &&
+    analysis?.earnings_score == null;
+
+  const hasNullModules =
+    analysis != null &&
+    COMPONENT_SCORES.some(({ key }) => analysis[key] == null);
+
   return (
     <div className="flex flex-col md:flex-row gap-8 mt-6 relative">
 
@@ -178,11 +188,17 @@ export default function CompanyOverviewPage({ params }: { params: { ticker: stri
                   score={analysis.integrity_score ?? 0}
                   lastAnalyzed={formatDate(company?.last_analyzed ?? analysis.run_at)}
                   startAnimation={isLoaded}
+                  muted={isFinanciallyBlind}
                 />
                 {confidence && (
                   <Tooltip content={CONFIDENCE_TOOLTIPS[confidence]} side="bottom">
                     <Badge risk="analyzing">Confidence: {confidence.toUpperCase()}</Badge>
                   </Tooltip>
+                )}
+                {isFinanciallyBlind && (
+                  <p className="font-sans text-[11px] text-[#7A786F] text-center leading-[1.5] max-w-[220px] uppercase tracking-[0.05em]">
+                    Financial data unavailable — score reflects governance and news signals only
+                  </p>
                 )}
               </div>
 
@@ -199,11 +215,16 @@ export default function CompanyOverviewPage({ params }: { params: { ticker: stri
                   const color = hasScore ? getScoreColor(score) : "#B0ADA7";
                   return (
                     <div key={key} className="flex flex-col gap-1">
-                      <div className="flex justify-between items-center">
+                      <div className="flex justify-between items-start">
                         <span className="font-sans text-[12px] text-[#7A786F]">{label}</span>
-                        <span className="font-mono text-[13px] font-medium" style={{ color }}>
-                          {formatScore(score)}
-                        </span>
+                        <div className="flex flex-col items-end">
+                          <span className="font-mono text-[13px] font-medium" style={{ color }}>
+                            {formatScore(score)}
+                          </span>
+                          {!hasScore && (
+                            <span className="font-sans text-[10px] text-[#B0ADA7]">Unavailable</span>
+                          )}
+                        </div>
                       </div>
                       <div
                         role="meter"
@@ -222,6 +243,15 @@ export default function CompanyOverviewPage({ params }: { params: { ticker: stri
                   );
                 })}
               </div>
+
+              {hasNullModules && (
+                <p className="font-sans text-[11px] text-[#B0ADA7] leading-[1.5] mb-3">
+                  Unavailable modules are excluded from the score and renormalized per the{" "}
+                  <Link href="/methodology" className="text-[#1C3558] underline underline-offset-2">
+                    scoring methodology
+                  </Link>.
+                </p>
+              )}
 
               <div className="font-sans text-[11px] text-[#B0ADA7] mb-6">
                 {periodCount > 0

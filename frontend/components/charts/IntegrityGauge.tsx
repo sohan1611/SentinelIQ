@@ -10,6 +10,7 @@ interface IntegrityGaugeProps {
   lastAnalyzed: string;
   loading?: boolean;
   startAnimation?: boolean;
+  muted?: boolean;
 }
 
 function getRiskDetails(score: number) {
@@ -20,7 +21,7 @@ function getRiskDetails(score: number) {
   return { color: "text-risk-strong", stroke: "stroke-risk-strong", label: "STRONG INTEGRITY" };
 }
 
-export function IntegrityScoreGauge({ score, lastAnalyzed, loading, startAnimation = true }: IntegrityGaugeProps) {
+export function IntegrityScoreGauge({ score, lastAnalyzed, loading, startAnimation = true, muted = false }: IntegrityGaugeProps) {
   const [currentScore, setCurrentScore] = useState(0);
   const [isDone, setIsDone] = useState(false);
   const [arcProgress, setArcProgress] = useState(0);
@@ -68,7 +69,9 @@ export function IntegrityScoreGauge({ score, lastAnalyzed, loading, startAnimati
     return () => cancelAnimationFrame(req);
   }, [score, startAnimation, reducedMotion]);
 
-  const risk = getRiskDetails(score);
+  const risk = muted
+    ? { color: "text-[#B0ADA7]", stroke: "stroke-[#B0ADA7]", label: "Limited Data" }
+    : getRiskDetails(score);
 
   if (loading) {
     return (
