@@ -1,8 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react"
-import { getToken, setToken, clearToken } from "@/lib/api/client"
-import { login as apiLogin, register as apiRegister, getMe } from "@/lib/api/auth"
+import { login as apiLogin, register as apiRegister, logout as apiLogout, getMe } from "@/lib/api/auth"
 import type { User, LoginRequest, RegisterRequest } from "@/types/user"
 
 interface AuthContextValue {
@@ -10,7 +9,7 @@ interface AuthContextValue {
   isLoading: boolean;
   login: (credentials: LoginRequest) => Promise<void>;
   register: (data: RegisterRequest) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
@@ -28,31 +27,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    if (!getToken()) {
-      setIsLoading(false)
-      return
-    }
+    // Cookie is sent automatically — just try /auth/me. A 401 means no session.
     getMe()
       .then(setUser)
-      .catch(() => clearToken())
+      .catch(() => setUser(null))
       .finally(() => setIsLoading(false))
   }, [])
 
   const login = useCallback(async (credentials: LoginRequest) => {
-    const { access_token } = await apiLogin(credentials)
-    setToken(access_token)
+    await apiLogin(credentials)
     setUser(await getMe())
   }, [])
 
   const register = useCallback(async (data: RegisterRequest) => {
-    const { access_token } = await apiRegister(data)
-    setToken(access_token)
+    await apiRegister(data)
     setUser(await getMe())
   }, [])
 
-  const logout = useCallback(() => {
-    clearToken()
+  const logout = useCallback(async () => {
     setUser(null)
+    try { await apiLogout() } catch {}
   }, [])
 
   return (

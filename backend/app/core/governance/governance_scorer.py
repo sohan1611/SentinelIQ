@@ -6,6 +6,7 @@ from typing import Optional
 from pydantic import BaseModel, field_validator
 
 from app.core.ai.gemini_client import generate_json_with_provenance
+from app.core.ai.prompt_utils import escape_for_format
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +85,10 @@ class GovernanceScorer:
         with open(prompt_path, "r", encoding="utf-8") as f:
             prompt_template = f.read()
 
-        prompt = prompt_template.format(company_name=company_name, news_text=news_text)
+        prompt = prompt_template.format(
+            company_name=escape_for_format(company_name),
+            news_text=escape_for_format(news_text),
+        )
 
         events, provenance = await generate_json_with_provenance(prompt)
         provenance_record = {

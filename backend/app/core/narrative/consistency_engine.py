@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import List, Dict, Optional
 
 from app.core.ai.gemini_client import generate_json_with_provenance
+from app.core.ai.prompt_utils import escape_for_format
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +38,11 @@ class ConsistencyEngine:
             text = stmt["text"]
             source = stmt["source"]
 
-            prompt = prompt_template.format(company_name=company_name, period=period, statement_text=text)
+            prompt = prompt_template.format(
+                company_name=escape_for_format(company_name),
+                period=escape_for_format(period),
+                statement_text=escape_for_format(text),
+            )
             result, provenance = await generate_json_with_provenance(prompt)
             provenance_records.append({
                 "period": period,

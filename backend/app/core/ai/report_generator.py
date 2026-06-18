@@ -2,6 +2,7 @@ import asyncio
 from pathlib import Path
 from typing import List
 from app.core.ai.gemini_client import generate_content
+from app.core.ai.prompt_utils import escape_for_format
 from app.models.company import Company
 from app.models.analysis_result import AnalysisResult
 from app.models.red_flag import RedFlag
@@ -68,9 +69,9 @@ class ReportGenerator:
             financial_data_note = ""
 
         prompt = prompt_template.format(
-            company_name=company.name,
-            ticker=company.ticker,
-            sector=company.sector or "Unknown",
+            company_name=escape_for_format(company.name),
+            ticker=escape_for_format(company.ticker),
+            sector=escape_for_format(company.sector or "Unknown"),
             score=analysis.integrity_score,
             risk_level=risk_level,
             financial_score=_fmt_score(analysis.financial_score),
@@ -78,8 +79,8 @@ class ReportGenerator:
             governance_score=_fmt_score(analysis.governance_score),
             earnings_score=_fmt_score(analysis.earnings_score),
             narrative_score=_fmt_score(analysis.narrative_score),
-            flags_formatted=flags_formatted,
-            contradictions_formatted=contradictions_formatted,
+            flags_formatted=escape_for_format(flags_formatted),
+            contradictions_formatted=escape_for_format(contradictions_formatted),
             financial_data_note=financial_data_note,
         )
 

@@ -2,21 +2,6 @@ import { ApiError } from "@/types/api"
 
 const API_BASE_URL = `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/api/v1`
 
-const TOKEN_STORAGE_KEY = "sentineliq_token"
-
-export function getToken(): string | null {
-  if (typeof window === "undefined") return null
-  return localStorage.getItem(TOKEN_STORAGE_KEY)
-}
-
-export function setToken(token: string): void {
-  localStorage.setItem(TOKEN_STORAGE_KEY, token)
-}
-
-export function clearToken(): void {
-  localStorage.removeItem(TOKEN_STORAGE_KEY)
-}
-
 interface RequestOptions extends Omit<RequestInit, "body"> {
   body?: unknown;
 }
@@ -48,15 +33,11 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     }
   }
 
-  const token = getToken()
-  if (token) {
-    requestHeaders.set("Authorization", `Bearer ${token}`)
-  }
-
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...rest,
     headers: requestHeaders,
     body: requestBody,
+    credentials: "include",
   })
 
   if (!response.ok) {
