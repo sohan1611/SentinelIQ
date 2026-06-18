@@ -21,6 +21,8 @@ Red Flags Detected:
 News Tone Shifts (from recent headlines, not management statements):
 {contradictions_formatted}
 
+{financial_data_note}
+
 Write a report with these exact sections:
 ## Executive Summary
 ## Key Concerns
@@ -30,6 +32,9 @@ Write a report with these exact sections:
 ## Analyst Note
 
 Key Concerns must be a bullet list using em-dash (—).
+The ## Financial Analysis section covers the quantitative forensic signals from
+financial statements. If any module score shows "Unavailable", note what data
+was missing and why that limits the analysis — do not substitute invented figures.
 The News Tone section covers sentiment in recent news headlines about
 the company. It is an experimental signal and does not factor into the
 Integrity Score. Do not describe it as management commentary, guidance,
