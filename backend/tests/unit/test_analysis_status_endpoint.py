@@ -17,7 +17,7 @@ async def test_get_analysis_status_maps_error_to_analysis_interrupted():
         id=uuid.uuid4(),
         company_id=uuid.uuid4(),
         status="error",
-        run_at=datetime.now(timezone.utc) - timedelta(minutes=15),
+        run_at=datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=15),
         integrity_score=None,
     )
     db = AsyncMock()
@@ -34,7 +34,7 @@ async def test_get_analysis_status_running_stage_unaffected():
         id=uuid.uuid4(),
         company_id=uuid.uuid4(),
         status="running:forensics",
-        run_at=datetime.now(timezone.utc),
+        run_at=datetime.now(timezone.utc).replace(tzinfo=None),
         integrity_score=None,
     )
     db = AsyncMock()
