@@ -164,7 +164,15 @@ async def _stage_narrative(ctx: StageContext):
         ctx.narrative_provenance = provenance
 
         for s in snaps:
-            sn = NarrativeSnapshot(company_id=ctx.company_id, fetched_at=datetime.now(timezone.utc), **s)
+            sn = NarrativeSnapshot(
+                company_id=ctx.company_id,
+                fetched_at=datetime.now(timezone.utc).replace(tzinfo=None),
+                period=s.get("period"),
+                statement_text=s.get("statement_text"),
+                sentiment_label=s.get("sentiment_label"),
+                sentiment_score=s.get("sentiment_score"),
+                source=s.get("source"),
+            )
             ctx.session.add(sn)
             ctx.narrative_snapshots.append(sn)
 
@@ -291,6 +299,6 @@ async def run_full_analysis(company_id: UUID, analysis_id: UUID):
                     pass
 
         analysis.status = "complete"
-        company.last_analyzed = datetime.now(timezone.utc)
+        company.last_analyzed = datetime.now(timezone.utc).replace(tzinfo=None)
         await session.commit()
         log.info("analysis complete")
