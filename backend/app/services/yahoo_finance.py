@@ -104,9 +104,8 @@ async def fetch_financials(ticker: str) -> list[dict]:
                 assets = get_val(bs, ["Total Assets"])
                 recv = get_val(bs, ["Accounts Receivable", "Net Receivables"])
 
-                gm = None
-                if rev and get_val(inc, ["Gross Profit"]):
-                    gm = get_val(inc, ["Gross Profit"]) / rev
+                gross_profit = get_val(inc, ["Gross Profit"])
+                gm = (gross_profit / rev) if rev and gross_profit else None
 
                 results.append({
                     "period": period_str,
