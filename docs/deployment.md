@@ -6,17 +6,37 @@ the step-by-step playbook for the one-time setup. Per ADR-012, creating the Rend
 projects, connecting the GitHub repo, and entering secrets are **owner-in-the-loop
 actions** — Claude Code does not perform these.
 
-## Live deployment (Phase 20, 2026-06-18)
+## Live deployment (Phase 20, 2026-06-18; verified + corrected 2026-06-19)
 
 | Service | URL |
 |---|---|
 | Backend (Render) | `https://sentineliq-y27m.onrender.com` |
-| Frontend (Vercel) | `https://sentineliq-ai.vercel.app` |
+| Frontend (Vercel, canonical) | `https://sentineliq-sohanmandal1611-7709s-projects.vercel.app` |
+| Frontend (Vercel, vanity alias) | `https://sentineliq-ai.vercel.app` |
 
-Health check verified: `{"status":"ok","database":"ok"}`.
+Health check verified live: `{"status":"ok","database":"ok"}`.
 
 **CORS requirement:** Render env var `FRONTEND_URL` must be set to the exact Vercel URL
 above (no trailing slash). Update it whenever the Vercel domain changes.
+
+**Vanity alias gotcha (found 2026-06-19):** `sentineliq-ai.vercel.app` was set up via
+`vercel alias set <deployment> sentineliq-ai.vercel.app` rather than as a project Domain.
+Unlike the canonical `*-sohanmandal1611-7709s-projects.vercel.app` / `*-git-main-*` URLs
+(which Vercel auto-repoints to the newest production deployment on every push), a manually
+set vanity alias is a **frozen pointer to whatever deployment it was last set to** — it does
+**not** track new deploys. It had silently drifted to a pre-Phase-23 deployment and was
+serving a false marketing claim ("earnings call transcripts") that Phase 23 had already
+removed from the real site. Re-pointed to the current production deployment as part of this
+fix. **If you want to keep using this alias, re-run after every deploy you care about:**
+```
+cd frontend && vercel alias set <latest-production-deployment-url> sentineliq-ai.vercel.app
+```
+Prefer linking to the canonical URL above in any new docs/marketing/links — it never goes
+stale. Four other vanity aliases on this Vercel account (`sentineliq-app`, `sentineliq-io`,
+`sentineliqhq`, and one malformed duplicate-name alias) were found pointing at an even older
+deployment during this same investigation and were **not** touched — likely abandoned naming
+experiments, left for the owner to repoint or remove at their discretion (`vercel alias ls`
+to see current state).
 
 ## Local dry-run (already verified, Phase 10 Step 5)
 
