@@ -37,7 +37,16 @@ async def fetch_company_info(ticker: str) -> dict:
         t = _ticker(ticker)
         info = t.info
         if not info or 'longName' not in info:
-            raise HTTPException(status_code=404, detail="No financial data available for this ticker.")
+            # t.info swallows its own HTTP errors and returns an empty/partial
+            # dict instead of raising on a Yahoo Finance rate-limit/block --
+            # indistinguishable here from a genuinely unknown ticker. Default
+            # to retriable (503), matching fetch_financials' convention below,
+            # rather than falsely claiming the company doesn't exist.
+            raise HTTPException(
+                status_code=503,
+                detail="FINANCIAL_DATA_UNAVAILABLE",
+                headers={"Retry-After": "120"},
+            )
         return {
             "longName": info.get("longName"),
             "sector": info.get("sector"),
@@ -49,6 +58,18 @@ async def fetch_company_info(ticker: str) -> dict:
         data = await asyncio.wait_for(asyncio.to_thread(_fetch), timeout=YFINANCE_TIMEOUT_SECONDS)
     except asyncio.TimeoutError:
         raise HTTPException(status_code=503, detail="Financial data timed out. Please try again.")
+    except HTTPException:
+        raise
+    except Exception:
+        # yfinance's underlying client can raise unexpected errors (confirmed live:
+        # a cookie/crumb AttributeError unrelated to whether the ticker is real)
+        # that don't reliably signal "ticker doesn't exist" -- treat as retriable
+        # rather than falsely claiming the company is invalid.
+        raise HTTPException(
+            status_code=503,
+            detail="FINANCIAL_DATA_UNAVAILABLE",
+            headers={"Retry-After": "120"},
+        )
     cache.set(cache_key, data, ttl_seconds=86400)
     return data
 
