@@ -11,32 +11,31 @@ actions** — Claude Code does not perform these.
 | Service | URL |
 |---|---|
 | Backend (Render) | `https://sentineliq-y27m.onrender.com` |
-| Frontend (Vercel, canonical) | `https://sentineliq-sohanmandal1611-7709s-projects.vercel.app` |
-| Frontend (Vercel, vanity alias) | `https://sentineliq-ai.vercel.app` |
+| Frontend (Vercel, canonical — this is the one to use/share) | `https://sentineliq-sohanmandal1611-7709s-projects.vercel.app` |
 
 Health check verified live: `{"status":"ok","database":"ok"}`.
 
-**CORS requirement:** Render env var `FRONTEND_URL` must be set to the exact Vercel URL
-above (no trailing slash). Update it whenever the Vercel domain changes.
+**CORS requirement:** Render env var `FRONTEND_URL` is set to the canonical URL above (no
+trailing slash) — confirmed as of 2026-06-19. This auto-tracks every production deploy
+(Vercel repoints it automatically), so unlike a vanity alias it never needs manual upkeep.
 
-**Vanity alias gotcha (found 2026-06-19):** `sentineliq-ai.vercel.app` was set up via
-`vercel alias set <deployment> sentineliq-ai.vercel.app` rather than as a project Domain.
-Unlike the canonical `*-sohanmandal1611-7709s-projects.vercel.app` / `*-git-main-*` URLs
-(which Vercel auto-repoints to the newest production deployment on every push), a manually
-set vanity alias is a **frozen pointer to whatever deployment it was last set to** — it does
-**not** track new deploys. It had silently drifted to a pre-Phase-23 deployment and was
-serving a false marketing claim ("earnings call transcripts") that Phase 23 had already
-removed from the real site. Re-pointed to the current production deployment as part of this
-fix. **If you want to keep using this alias, re-run after every deploy you care about:**
-```
-cd frontend && vercel alias set <latest-production-deployment-url> sentineliq-ai.vercel.app
-```
-Prefer linking to the canonical URL above in any new docs/marketing/links — it never goes
-stale. Four other vanity aliases on this Vercel account (`sentineliq-app`, `sentineliq-io`,
-`sentineliqhq`, and one malformed duplicate-name alias) were found pointing at an even older
-deployment during this same investigation and were **not** touched — likely abandoned naming
-experiments, left for the owner to repoint or remove at their discretion (`vercel alias ls`
-to see current state).
+**Vanity alias gotcha (found + fixed 2026-06-19, then made permanently moot the same day):**
+`sentineliq-ai.vercel.app` and `sentineliq-io.vercel.app` were set up via
+`vercel alias set <deployment> <alias>` rather than as project Domains — a **frozen pointer
+to whatever deployment it was last set to**, which does **not** track new deploys (unlike the
+canonical `*-sohanmandal1611-7709s-projects.vercel.app` / `*-git-main-*` URLs). One had
+drifted to a pre-Phase-23 deployment and was serving a false marketing claim ("earnings call
+transcripts") that Phase 23 had already removed from the real site; both were re-pointed to
+current production as a same-day fix. The CORS env var was then switched from the `ai` alias
+to the canonical URL above, which makes this whole class of bug moot for the *primary* URL —
+but as a side effect, **`sentineliq-ai.vercel.app` and `sentineliq-io.vercel.app` now load the
+static marketing page fine but fail CORS on login/register/analyze** (the backend trusts
+exactly one `FRONTEND_URL` value). Don't use either as the working app URL going forward;
+they're decorative only unless re-pointed *and* `FRONTEND_URL` is changed back, which would
+just reintroduce the original staleness risk. Three other vanity aliases on this Vercel account
+(`sentineliq-app`, `sentineliqhq`, and one malformed duplicate-name alias) point at an even
+older deployment and were **not** touched — abandoned naming experiments, left for the owner
+to repoint or remove at their discretion (`vercel alias ls` to see current state).
 
 ## Local dry-run (already verified, Phase 10 Step 5)
 
