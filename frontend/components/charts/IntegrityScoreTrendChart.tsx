@@ -57,8 +57,6 @@ export function IntegrityScoreTrendChart({ history, isLoading, actions }: Integr
         data: history.map((h) => h.integrity_score),
         borderColor: colors.navy,
         backgroundColor: colors.navy,
-        pointRadius: 3,
-        pointHoverRadius: 4,
         tension: 0,
         spanGaps: true,
       },
