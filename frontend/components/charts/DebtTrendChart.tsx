@@ -13,7 +13,7 @@ import {
 import { Line } from "react-chartjs-2"
 import { ChartFrame } from "@/components/ui/ChartFrame"
 import { colors } from "@/lib/theme/tokens"
-import { baseChartOptions } from "@/lib/theme/chartOptions"
+import { baseChartOptions, createEndLabelPlugin } from "@/lib/theme/chartOptions"
 import { alignByPeriod } from "@/lib/utils/chartData"
 import { formatPercent } from "@/lib/utils/formatNumber"
 import type { DebtMetricPoint } from "@/types/analysis"
@@ -69,7 +69,8 @@ export function DebtTrendChart({ debtMetrics, actions }: DebtTrendChartProps) {
 
   const options = baseChartOptions<"line">(
     (v) => formatPercent(v, 0),
-    (ctx) => `${ctx.dataset.label}: ${formatPercent(ctx.parsed.y, 1)}`
+    (ctx) => `${ctx.dataset.label}: ${formatPercent(ctx.parsed.y, 1)}`,
+    { emphasizeZero: true }
   )
 
   return (
@@ -78,7 +79,7 @@ export function DebtTrendChart({ debtMetrics, actions }: DebtTrendChartProps) {
       subtitle="Debt-to-revenue and year-over-year debt growth"
       actions={actions}
     >
-      <Line data={chartData} options={options} />
+      <Line data={chartData} options={options} plugins={[createEndLabelPlugin((v) => formatPercent(v, 0))]} />
     </ChartFrame>
   )
 }
