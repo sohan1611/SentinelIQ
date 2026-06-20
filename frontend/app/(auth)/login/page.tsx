@@ -127,7 +127,7 @@ export default function LoginPage() {
 
       <div className="text-center mt-[20px]">
         <span className="font-sans text-[13px] text-[#7A786F]">
-          Don't have an account?{" "}
+          Don&apos;t have an account?{" "}
         </span>
         <Link href="/register" className="font-sans text-[13px] text-[#1C3558] hover:underline">
           Get started →

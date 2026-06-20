@@ -19,7 +19,7 @@ export default function NotFound() {
         </h1>
 
         <p className="font-sans text-[14px] text-[#7A786F] max-w-[360px] mx-auto mb-8 leading-[1.6]">
-          The page you're looking for doesn't exist or has been moved.
+          The page you&apos;re looking for doesn&apos;t exist or has been moved.
         </p>
 
         <div className="flex items-center justify-center gap-4">
