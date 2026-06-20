@@ -12,11 +12,14 @@ router = APIRouter()
 
 
 @router.get("/health")
+@router.head("/health")
 async def health_check(db: AsyncSession = Depends(get_db)):
     """Unauthenticated liveness/readiness probe (ADR-012).
 
     Confirms the API process is up and can reach the database -- used by
-    Render to detect free-tier spin-down/restart cycles.
+    Render to detect free-tier spin-down/restart cycles. HEAD is supported
+    explicitly because uptime monitors (e.g. UptimeRobot) default to HEAD
+    requests for HTTP(s) checks, which otherwise hit a bare 405 here.
     """
     try:
         await db.execute(text("SELECT 1"))
