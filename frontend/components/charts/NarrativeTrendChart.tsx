@@ -52,8 +52,6 @@ export function NarrativeTrendChart({ snapshots, actions }: NarrativeTrendChartP
         data: data[0],
         borderColor: colors.navy,
         backgroundColor: colors.navy,
-        pointRadius: 3,
-        pointHoverRadius: 4,
         tension: 0,
         spanGaps: true,
       },
