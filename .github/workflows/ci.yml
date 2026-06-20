@@ -1,16 +1,15 @@
 name: Backend CI
 
+# No `paths:` filter here on purpose: main's branch protection requires this
+# job's "test" check by name on every PR. A path filter (e.g. backend/**)
+# means the check never runs -- and therefore never passes -- on any PR that
+# doesn't touch those paths, permanently blocking docs-only/frontend-only
+# changes from merging. Run unconditionally; the job itself is ~30s.
 on:
   push:
     branches: [main]
-    paths:
-      - "backend/**"
-      - ".github/workflows/ci.yml"
   pull_request:
     branches: [main]
-    paths:
-      - "backend/**"
-      - ".github/workflows/ci.yml"
 
 jobs:
   test:
