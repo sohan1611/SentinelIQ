@@ -11,6 +11,12 @@ export function baseChartOptions<TType extends "line" | "bar">(
     responsive: true,
     maintainAspectRatio: false,
     interaction: { mode: "index" as const, intersect: false },
+    // Restrained, FT/Bloomberg-style point markers: invisible at rest (the line
+    // itself carries the data), a single clear dot appears under the cursor on
+    // hover via the index-mode interaction above. Has no effect on bar charts.
+    elements: {
+      point: { radius: 0, hoverRadius: 5, hoverBorderWidth: 2 },
+    },
     plugins: {
       legend: {
         position: "top" as const,
@@ -30,7 +36,12 @@ export function baseChartOptions<TType extends "line" | "bar">(
         bodyColor: colors.text.primary,
         borderColor: chartTheme.gridColor,
         borderWidth: 1,
-        padding: 8,
+        padding: 10,
+        cornerRadius: 4,
+        caretSize: 6,
+        boxPadding: 4,
+        bodySpacing: 6,
+        usePointStyle: true,
         titleFont: { family: chartTheme.fontFamily, size: chartTheme.labelFontSize, weight: "bold" as const },
         bodyFont: { family: chartTheme.numericFontFamily, size: chartTheme.numericFontSize },
         callbacks: tooltipLabel ? { label: tooltipLabel } : undefined,
@@ -38,9 +49,12 @@ export function baseChartOptions<TType extends "line" | "bar">(
     },
     scales: {
       x: {
-        grid: { color: chartTheme.gridColor },
+        // No vertical gridlines and no boxed axis line -- FT/Bloomberg charts
+        // read time left-to-right off the tick labels alone; only the Y-axis
+        // carries reference lines.
+        grid: { display: false },
         ticks: { color: chartTheme.tickColor, font: { family: chartTheme.fontFamily, size: chartTheme.labelFontSize } },
-        border: { color: chartTheme.gridColor },
+        border: { display: false },
       },
       y: {
         grid: { color: chartTheme.gridColor },
