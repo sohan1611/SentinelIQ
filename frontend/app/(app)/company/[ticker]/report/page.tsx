@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { use } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -38,8 +39,8 @@ function buildRecommendation(analysis: AnalysisResultWithFlags): { variant: "sta
   return { variant: isActionRequired ? "action-required" : "standard", body };
 }
 
-export default function ReportPage({ params }: { params: { ticker: string } }) {
-  const ticker = params.ticker;
+export default function ReportPage({ params }: { params: Promise<{ ticker: string }> }) {
+  const { ticker } = use(params);
   const { company, analysis, isLoading: companyLoading, error } = useCompanyContext();
   const { report, isLoading: reportLoading } = useReport(ticker, !!analysis);
   const { isAdding, add: handleAddToWatchlist } = useAddToWatchlist(ticker);

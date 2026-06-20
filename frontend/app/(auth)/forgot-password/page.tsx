@@ -36,10 +36,10 @@ export default function ForgotPasswordPage() {
             Reset link sent.
           </h2>
           <p className="font-sans text-[13px] text-[#7A786F] mb-6 max-w-[280px]">
-            If {email || "jane@firm.com"} has an account, you'll receive an email within 2 minutes.
+            If {email || "jane@firm.com"} has an account, you&apos;ll receive an email within 2 minutes.
           </p>
           <p className="font-sans text-[12px] text-[#B0ADA7] italic">
-            Didn't receive it? Check your spam folder.
+            Didn&apos;t receive it? Check your spam folder.
           </p>
         </div>
         
@@ -77,7 +77,7 @@ export default function ForgotPasswordPage() {
           Reset your password
         </h2>
         <p className="font-sans text-[13px] text-[#7A786F] mb-[24px]">
-          Enter your email and we'll send a reset link.
+          Enter your email and we&apos;ll send a reset link.
         </p>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-[20px]">

@@ -62,7 +62,7 @@ export default function WatchlistPage() {
         </div>
       ) : error ? (
         <div className="bg-[#FFFFFF] border border-[#E3DFD8] rounded-[8px] p-10 flex flex-col items-center justify-center text-center">
-          <div className="font-sans text-[14px] text-[#B03028] mb-1">Couldn't load your watchlist.</div>
+          <div className="font-sans text-[14px] text-[#B03028] mb-1">Couldn&apos;t load your watchlist.</div>
           <div className="font-sans text-[12px] text-[#7A786F]">{error}</div>
         </div>
       ) : items.length === 0 ? (

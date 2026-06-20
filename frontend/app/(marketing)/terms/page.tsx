@@ -139,7 +139,7 @@ export default function TermsPage() {
               7. LIMITATION OF LIABILITY
             </div>
             <p className="text-text-secondary">
-              SentinelIQ is provided on an "as is" basis without warranties of any kind,
+              SentinelIQ is provided on an &quot;as is&quot; basis without warranties of any kind,
               express or implied. To the maximum extent permitted by applicable law,
               SentinelIQ and its operators shall not be liable for any direct, indirect,
               incidental, consequential, or punitive damages arising from your use of or
