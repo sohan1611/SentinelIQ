@@ -240,6 +240,61 @@ Amendments are explicit and dated — never silent behavioral changes inside a f
 > **Analytics decision (Step 4):** no third-party analytics — confirmed by owner.
 > Privacy Policy section 3 ("What we do not collect") reflects this accurately.
 
+> **Phases 23-30 amendment (2026-06-20):** Honesty hardening, data-fetch resilience,
+> report reliability, auth/prompt security, UI error states, and a technical-debt sweep
+> (Phases 23-28) all landed as previously-described commits. Phase 29 (Smoke Test
+> Harness) and Phase 30 (Deployment) are the ones worth recording in detail here, since
+> both surfaced real defects no static check could have caught.
+>
+> **Phase 29 — first live run, two real bugs found and fixed.** Running
+> `backend/scripts/smoke_test.py` against the real Neon DB + Gemini key for the first
+> time (previously blocked on founder-supplied credentials) surfaced:
+> 1. Every analysis got stuck in `running:Generating report...` forever. Root cause:
+>    `analysis_worker.py`'s final commit block (`company.last_analyzed = datetime.now(
+>    timezone.utc)`) assigned a tz-*aware* datetime into a naive `TIMESTAMP WITHOUT TIME
+>    ZONE` column, outside the per-stage try/except, so the whole function aborted with
+>    no fallback. A side effect of Phase 18's `datetime.utcnow()` migration — every other
+>    call site got the companion `.replace(tzinfo=None)`, this one didn't. Fixed (both
+>    this site and the `NarrativeSnapshot(fetched_at=...)` site below).
+> 2. The narrative stage failed on every run: `_stage_narrative` spread the snapshot dict
+>    from `ConsistencyEngine.analyze()` (`**s`) directly into `NarrativeSnapshot(...)`,
+>    but Phase 14's grounding gate had added a `source_quote` key with no matching ORM
+>    column. Caught by the per-stage isolation (fell back to narrative=50.0, contained),
+>    but meant narrative never actually computed a real score. Fixed by constructing the
+>    model from named fields instead of a blind spread; `source_quote` is still preserved
+>    in `module_details.narrative.snapshots` (the JSON audit trail), just not passed to
+>    the ORM model.
+>
+> A live UPST run after the fix surfaced a real, grounded governance flag (an actual
+> securities-fraud lawsuit, verbatim-quoted source) — confirming Phase 14's grounding
+> contract works correctly on a true positive, not just in tests.
+>
+> **Phase 30 — deployment was already live (since 2026-06-18, an earlier "Phase 20"
+> session this doc never recorded), but had four real, live defects:**
+> 1. Vercel's Deployment Protection ("Standard Protection") was blocking all public
+>    access — the live frontend returned a bare 401 to every visitor. Owner disabled it
+>    (Vercel → Settings → Deployment Protection → Require Log In → off).
+> 2. `sentineliq-ai.vercel.app` — a manually-set `vercel alias`, not an auto-tracking
+>    project Domain — had drifted to a pre-Phase-23 deployment and was serving a false
+>    marketing claim ("earnings call transcripts") Phase 23 had already removed from the
+>    real site. Re-pointed; documented the staleness mechanism in `docs/deployment.md`.
+> 3. Render's `FRONTEND_URL` was set to that same fragile alias. Owner changed it to the
+>    canonical auto-tracking domain (`sentineliq-sohanmandal1611-7709s-projects.vercel.app`),
+>    permanently closing the staleness gap rather than requiring manual re-aliasing after
+>    every future deploy.
+> 4. `GET /health` had no `HEAD` handler. UptimeRobot's monitor (set up this session)
+>    defaults to HEAD requests for HTTP(s) checks; every one got a bare 405, which
+>    UptimeRobot correctly read as "down" — even though the service was healthy and
+>    answering every real (GET) request the whole time. Fixed by stacking
+>    `@router.head("/health")` on the same handler (`backend/app/api/health.py`) so HEAD
+>    gets the identical real DB-connectivity check, just without a body (ASGI strips the
+>    body for HEAD automatically). This was the actual cause of every "stuck-analysis
+>    reaper"-style outage UptimeRobot reported this session — the backend never crashed.
+>
+> **Monitoring is now live**: UptimeRobot checks both `/health` (backend) and the
+> frontend every 5 minutes. **`docs/deployment.md`** records the canonical URL, the
+> Render service id, and the vanity-alias gotcha.
+
 ---
 
 ## Git Commit Identity — MANDATORY
