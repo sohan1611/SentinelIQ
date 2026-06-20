@@ -13,7 +13,7 @@ import {
 import { Line } from "react-chartjs-2"
 import { ChartFrame } from "@/components/ui/ChartFrame"
 import { colors } from "@/lib/theme/tokens"
-import { baseChartOptions } from "@/lib/theme/chartOptions"
+import { baseChartOptions, createEndLabelPlugin } from "@/lib/theme/chartOptions"
 import { alignByPeriod } from "@/lib/utils/chartData"
 import { formatPercent } from "@/lib/utils/formatNumber"
 import type { NarrativeSnapshotData } from "@/types/analysis"
@@ -60,7 +60,8 @@ export function NarrativeTrendChart({ snapshots, actions }: NarrativeTrendChartP
 
   const options = baseChartOptions<"line">(
     (v) => formatPercent(v, 0),
-    (ctx) => `Sentiment: ${formatPercent(ctx.parsed.y, 0)}`
+    (ctx) => `Sentiment: ${formatPercent(ctx.parsed.y, 0)}`,
+    { emphasizeZero: true }
   )
 
   return (
@@ -69,7 +70,7 @@ export function NarrativeTrendChart({ snapshots, actions }: NarrativeTrendChartP
       subtitle="Sentiment score derived from recent news headlines, per period"
       actions={actions}
     >
-      <Line data={chartData} options={options} />
+      <Line data={chartData} options={options} plugins={[createEndLabelPlugin((v) => formatPercent(v, 0))]} />
     </ChartFrame>
   )
 }
