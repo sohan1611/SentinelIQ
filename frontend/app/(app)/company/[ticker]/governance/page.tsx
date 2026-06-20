@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { use } from "react";
 import { RedFlagTimeline } from "@/components/charts/RedFlagTimeline";
 import { GovernanceChecklist } from "@/components/modules/GovernanceChecklist";
 import { ModuleScoreBadge } from "@/components/modules/ScoreCard";
@@ -8,8 +9,8 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { useCompanyContext } from "@/contexts/CompanyContext";
 import { normalizeSeverity, flagDate } from "@/lib/utils/redFlag";
 
-export default function GovernancePage({ params }: { params: { ticker: string } }) {
-  const ticker = params.ticker;
+export default function GovernancePage({ params }: { params: Promise<{ ticker: string }> }) {
+  const { ticker } = use(params);
   const { company, analysis, isLoading, error } = useCompanyContext();
 
   if (isLoading) {
