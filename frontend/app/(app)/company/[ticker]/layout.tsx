@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import { PageTransition } from "@/components/layout/PageTransition";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Button } from "@/components/ui/Button";
@@ -16,9 +16,9 @@ export default function CompanyLayout({
   params,
 }: {
   children: React.ReactNode;
-  params: { ticker: string };
+  params: Promise<{ ticker: string }>;
 }) {
-  const ticker = params.ticker;
+  const { ticker } = use(params);
   const pathname = usePathname();
 
   const isReport = pathname.includes("/report");

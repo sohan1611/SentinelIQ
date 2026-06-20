@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { use } from "react";
 import { NarrativeTrendChart } from "@/components/charts/NarrativeTrendChart";
 import { NarrativeComparison } from "@/components/modules/NarrativeComparison";
 import { ModuleScoreBadge } from "@/components/modules/ScoreCard";
@@ -20,8 +21,8 @@ function sentimentRisk(sentiment: "OPTIMISTIC" | "CAUTIONARY" | "NEUTRAL"): "str
   return "low";
 }
 
-export default function NarrativePage({ params }: { params: { ticker: string } }) {
-  const ticker = params.ticker;
+export default function NarrativePage({ params }: { params: Promise<{ ticker: string }> }) {
+  const { ticker } = use(params);
   const { company, analysis, isLoading, error } = useCompanyContext();
 
   if (isLoading) {

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { use } from "react";
 import { CashFlowChart } from "@/components/charts/CashFlowChart";
 import { DebtTrendChart } from "@/components/charts/DebtTrendChart";
 import { RevenueQualityChart } from "@/components/charts/RevenueQualityChart";
@@ -8,8 +9,8 @@ import { ModuleScoreBadge } from "@/components/modules/ScoreCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useCompanyContext } from "@/contexts/CompanyContext";
 
-export default function FinancialsPage({ params }: { params: { ticker: string } }) {
-  const ticker = params.ticker;
+export default function FinancialsPage({ params }: { params: Promise<{ ticker: string }> }) {
+  const { ticker } = use(params);
   const { company, analysis, isLoading, error } = useCompanyContext();
 
   if (isLoading) {
