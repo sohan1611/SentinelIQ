@@ -14,7 +14,7 @@ import { Line } from "react-chartjs-2"
 import { ChartFrame } from "@/components/ui/ChartFrame"
 import { Skeleton } from "@/components/ui/Skeleton"
 import { colors } from "@/lib/theme/tokens"
-import { baseChartOptions } from "@/lib/theme/chartOptions"
+import { baseChartOptions, createEndLabelPlugin } from "@/lib/theme/chartOptions"
 import { formatScore } from "@/lib/utils/formatNumber"
 import { formatDate } from "@/lib/utils/formatDate"
 import type { AnalysisHistoryItem } from "@/types/analysis"
@@ -72,7 +72,7 @@ export function IntegrityScoreTrendChart({ history, isLoading, actions }: Integr
 
   return (
     <ChartFrame title={TITLE} subtitle={SUBTITLE} actions={actions}>
-      <Line data={chartData} options={options} />
+      <Line data={chartData} options={options} plugins={[createEndLabelPlugin(formatScore)]} />
     </ChartFrame>
   )
 }
