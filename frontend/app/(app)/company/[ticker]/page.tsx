@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { use } from "react";
 import { IntegrityScoreGauge } from "@/components/charts/IntegrityGauge";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -69,8 +70,8 @@ const CONFIDENCE_TOOLTIPS: Record<"low" | "medium" | "high", string> = {
   low: "2 or fewer modules produced real signal",
 };
 
-export default function CompanyOverviewPage({ params }: { params: { ticker: string } }) {
-  const ticker = params.ticker;
+export default function CompanyOverviewPage({ params }: { params: Promise<{ ticker: string }> }) {
+  const { ticker } = use(params);
 
   const { company, analysis, isLoading, error, analysisStatus, isRunning, analysisError, startAnalysis: start } = useCompanyContext();
   const { isAdding, add: handleAddToWatchlist } = useAddToWatchlist(ticker);
