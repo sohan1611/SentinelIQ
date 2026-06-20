@@ -72,7 +72,7 @@ function SearchResults() {
             Enter a company name or ticker to begin.
           </div>
           <div className="font-sans text-[13px] text-[#B0ADA7] text-center">
-            e.g. TSLA, AAPL, or "Wirecard"
+            e.g. TSLA, AAPL, or &quot;Wirecard&quot;
           </div>
         </div>
       ) : isLoading ? (
@@ -122,7 +122,7 @@ function SearchResults() {
       ) : (
         <div className="bg-[#FFFFFF] border border-[#E3DFD8] rounded-[8px] p-12 flex flex-col items-center justify-center min-h-[200px]">
           <div className="font-sans text-[15px] text-[#7A786F] mb-2 text-center">
-            No results for "{query}"
+            No results for &quot;{query}&quot;
           </div>
           {looksLikeTicker ? (
             <Link href={ROUTES.company(directTicker)} className="font-sans text-[13px] text-[#1C3558] hover:underline text-center">

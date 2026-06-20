@@ -117,9 +117,9 @@ export default function MethodologyPage() {
               3. RENORMALIZATION — ABSENCE IS NOT NEUTRAL
             </div>
             <p className="text-text-secondary mb-4">
-              If a module's pipeline stage fails to produce a real score (network failure,
+              If a module&apos;s pipeline stage fails to produce a real score (network failure,
               zero financial periods, AI timeout), that module is excluded from{" "}
-              <em>both</em> the numerator and the denominator. The remaining modules'
+              <em>both</em> the numerator and the denominator. The remaining modules&apos;
               weights are rescaled to sum to 1.0 among themselves — the score reflects only
               what was actually measured.
             </p>
@@ -261,11 +261,11 @@ export default function MethodologyPage() {
             </div>
             <p className="text-text-secondary">
               Narrative Consistency is computed and shown on the Narrative tab, but carries
-              zero weight in the Integrity Score. The current pipeline derives "statements"
-              from news headlines, not from management's own earnings-call or filing language.
+              zero weight in the Integrity Score. The current pipeline derives &quot;statements&quot;
+              from news headlines, not from management&apos;s own earnings-call or filing language.
               It measures press-coverage tone consistency — a real but different signal than
               management narrative consistency. Until a transcript pipeline exists, it is
-              labeled "experimental" and excluded from weighting rather than diluting the
+              labeled &quot;experimental&quot; and excluded from weighting rather than diluting the
               score with a potentially misleading signal.
             </p>
           </section>
