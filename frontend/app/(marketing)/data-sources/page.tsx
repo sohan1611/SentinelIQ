@@ -48,9 +48,9 @@ export default function DataSourcesPage() {
                 Critical limitation: restated, not as-filed
               </p>
               <p className="font-sans text-[13px] text-text-secondary">
-                Yahoo Finance serves the <em>current, restated</em> view of a company's
+                Yahoo Finance serves the <em>current, restated</em> view of a company&apos;s
                 financial history — not the figures as originally filed with the SEC.
-                When a company restates a prior period, Yahoo's historical series updates
+                When a company restates a prior period, Yahoo&apos;s historical series updates
                 retroactively. SentinelIQ has no access to point-in-time, as-filed figures.
               </p>
             </div>
@@ -58,11 +58,11 @@ export default function DataSourcesPage() {
             <p className="text-text-secondary">
               This matters specifically for fraud forensics: a restatement is itself one of
               the strongest fraud signals that exists — it is an admission that previously
-              published numbers were wrong. If a company's aggressive original figures were
+              published numbers were wrong. If a company&apos;s aggressive original figures were
               later corrected, the divergence patterns that would have flagged the original
               manipulation may no longer be visible in the restated data. Read forensic scores
-              as: <em>"Does this company's financial history, as Yahoo Finance reports it today,
-              show signs of aggressive accounting?"</em> — not as a verdict on originally-filed
+              as: <em>&quot;Does this company&apos;s financial history, as Yahoo Finance reports it today,
+              show signs of aggressive accounting?&quot;</em> — not as a verdict on originally-filed
               figures.
             </p>
           </section>
@@ -107,13 +107,13 @@ export default function DataSourcesPage() {
                 Headlines, not transcripts
               </p>
               <p className="font-sans text-[13px] text-text-secondary">
-                Everything SentinelIQ calls "governance evidence" or "narrative" is derived
+                Everything SentinelIQ calls &quot;governance evidence&quot; or &quot;narrative&quot; is derived
                 from news headlines — not from earnings call transcripts, management prepared
                 remarks, or SEC filings (10-K/10-Q MD&A, proxy statements). Governance scoring
                 evaluates what journalists reported; narrative measures press-coverage tone
                 consistency. These are real signals, but different ones than management
                 narrative analysis would produce. This is why Narrative Consistency is
-                labeled "experimental" and carries zero weight in the Integrity Score.
+                labeled &quot;experimental&quot; and carries zero weight in the Integrity Score.
               </p>
             </div>
           </section>
@@ -139,7 +139,7 @@ export default function DataSourcesPage() {
             </p>
             <p className="text-text-secondary">
               Each Gemini call has a 30-second timeout. A per-process daily cap of 200
-              requests (well below Gemini's 1,500/day free limit) guards against runaway
+              requests (well below Gemini&apos;s 1,500/day free limit) guards against runaway
               loops. When the cap is reached or a call times out, the affected module
               returns a neutral score and the analysis continues normally.
             </p>

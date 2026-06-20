@@ -58,7 +58,7 @@ export default function PrivacyPage() {
             </p>
             <p className="text-text-secondary">
               <span className="font-medium text-text-primary">Error feedback.</span>{" "}
-              If you submit a flag issue report via the "Report an issue" feature, we log
+              If you submit a flag issue report via the &quot;Report an issue&quot; feature, we log
               the analysis ID, the flag ID, and the message you wrote. This is stored in
               server logs and is not attached to a permanent database record.
             </p>
