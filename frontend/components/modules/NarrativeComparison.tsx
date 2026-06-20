@@ -32,7 +32,7 @@ export function NarrativeComparison({ left, right, contradictionAlert, alertSeve
         <div className="flex-1 p-4 flex flex-col items-start bg-surface">
           <div className="font-mono text-[11px] text-text-secondary mb-3">{left.period}</div>
           <p className="font-sans text-[14px] text-text-primary italic mb-4 leading-relaxed flex-1">
-            "{left.quote}"
+            &quot;{left.quote}&quot;
           </p>
           <Badge risk={sentimentMap[left.sentiment]}>{left.sentiment}</Badge>
         </div>
@@ -41,7 +41,7 @@ export function NarrativeComparison({ left, right, contradictionAlert, alertSeve
         <div className="flex-1 p-4 flex flex-col items-start bg-surface">
           <div className="font-mono text-[11px] text-text-secondary mb-3">{right.period}</div>
           <p className="font-sans text-[14px] text-text-primary italic mb-4 leading-relaxed flex-1">
-            "{right.quote}"
+            &quot;{right.quote}&quot;
           </p>
           <Badge risk={sentimentMap[right.sentiment]}>{right.sentiment}</Badge>
         </div>
