@@ -176,6 +176,19 @@ class AnalysisStatusResponse(BaseModel):
     elapsed_seconds: int
 
 
+class CompareItemResponse(BaseModel):
+    """Phase 37 (F5, scoped to a comparison view): one column of GET
+    /analysis/compare. `found=False` means the ticker isn't a known company
+    at all; `found=True, analysis=None` means it's a known company with no
+    completed analysis yet -- two distinct honest states, never collapsed
+    into a single silent gap."""
+    ticker: str
+    company_name: Optional[str] = None
+    found: bool
+    analysis: Optional[AnalysisResultResponse] = None
+    red_flag_count: int = 0
+
+
 class AnalysisRunRequest(BaseModel):
     ticker: str
 
