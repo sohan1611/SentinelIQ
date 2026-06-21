@@ -106,6 +106,14 @@ class GovernanceModuleDetails(BaseModel):
     flags: List[Dict[str, Any]] = []
 
 
+class RestatementCheckDetails(BaseModel):
+    """Phase 36: distinguishes 'checked, no restatements found' from 'no
+    EDGAR coverage for this company' -- absence of flags must never be
+    silently read as a clean check when coverage itself is the unknown."""
+    coverage: bool = False
+    facts_checked: int = 0
+
+
 # ---------------------------------------------------------------------------
 # Versioned top-level container (schema_version = 0 means pre-Phase-15 row)
 # ---------------------------------------------------------------------------
@@ -121,6 +129,7 @@ class ModuleDetails(BaseModel):
     narrative: NarrativeModuleDetails = NarrativeModuleDetails()
     governance: GovernanceModuleDetails = GovernanceModuleDetails()
     financial_data_status: Optional[str] = None
+    restatement_check: RestatementCheckDetails = RestatementCheckDetails()
 
 
 # ---------------------------------------------------------------------------
