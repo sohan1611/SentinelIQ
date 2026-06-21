@@ -7,3 +7,4 @@ from .report import Report
 from .watchlist import WatchlistItem
 from .narrative_snapshot import NarrativeSnapshot
 from .analysis_run import AnalysisRun
+from .edgar_fact import EdgarFinancialFact
