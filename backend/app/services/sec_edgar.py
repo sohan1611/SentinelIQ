@@ -105,6 +105,41 @@ async def fetch_company_facts(cik: str) -> dict | None:
     return data
 
 
+async def fetch_all_concept_histories(ticker: str) -> dict[str, list[dict]] | None:
+    """Returns {field_name: [entries]} for every CONCEPT_CANDIDATES field plus
+    a best-effort total_debt_approx history, or None if this ticker has no
+    CIK at all, or has a CIK but no EDGAR XBRL coverage (e.g. a foreign
+    private issuer filing 20-F). The single caller-facing entry point for
+    the analysis pipeline (Phase 36) -- callers never need to know about
+    get_cik/fetch_company_facts/extract_concept_history individually."""
+    cik = await get_cik(ticker)
+    if not cik:
+        return None
+    facts = await fetch_company_facts(cik)
+    if not facts:
+        return None
+
+    histories = {
+        field: extract_concept_history(facts, candidates)
+        for field, candidates in CONCEPT_CANDIDATES.items()
+    }
+    histories["total_debt_approx"] = _total_debt_history(facts)
+    return histories
+
+
+def _total_debt_history(facts: dict) -> list[dict]:
+    noncurrent = extract_concept_history(facts, TOTAL_DEBT_COMPONENT_CONCEPTS[:1])
+    current = extract_concept_history(facts, TOTAL_DEBT_COMPONENT_CONCEPTS[1:])
+    by_key: dict[tuple, dict] = {}
+    for e in noncurrent:
+        by_key[(e["end"], e["accn"])] = dict(e)
+    for e in current:
+        key = (e["end"], e["accn"])
+        if key in by_key:
+            by_key[key]["val"] = by_key[key]["val"] + e["val"]
+    return list(by_key.values())
+
+
 def extract_concept_history(facts: dict, concept_candidates: list[str]) -> list[dict]:
     """Returns EVERY historical entry (every filing, every amendment) for the
     first candidate concept found, not just the latest value -- this full

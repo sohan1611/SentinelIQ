@@ -75,6 +75,11 @@ export interface GovernanceFlagDetail {
   source_quote: string | null;
 }
 
+export interface RestatementCheckDetails {
+  coverage: boolean;
+  facts_checked: number;
+}
+
 export interface ModuleScores {
   financial?: number;
   cashflow?: number;
@@ -114,6 +119,7 @@ export interface ModuleDetails {
     flags?: GovernanceFlagDetail[];
   };
   financial_data_status?: string | null;
+  restatement_check?: RestatementCheckDetails;
 }
 
 export interface AnalysisResult {
