@@ -61,6 +61,7 @@ export default function FinancialsPage({ params }: { params: Promise<{ ticker: s
   const accrualRatios = details?.cashflow?.accrual_ratios ?? [];
   const debtMetrics = details?.debt?.debt_metrics ?? [];
   const debtScore = details?.scores?.debt;
+  const restatementCheck = details?.restatement_check;
 
   return (
     <div className="w-full flex flex-col gap-6 mt-6 pb-16">
@@ -77,6 +78,13 @@ export default function FinancialsPage({ params }: { params: Promise<{ ticker: s
         debtMetrics={debtMetrics}
         actions={<ModuleScoreBadge score={debtScore} />}
       />
+      {restatementCheck && (
+        <p className="font-sans text-[11px] text-text-muted">
+          {restatementCheck.coverage
+            ? `Restatement check: SEC EDGAR filing history reviewed (${restatementCheck.facts_checked} data points). Any discrepancy between an original and later-amended filing appears in the red flags above.`
+            : "Restatement check: not available — no SEC EDGAR filing history found for this company (common for foreign private issuers, or companies not registered with the SEC)."}
+        </p>
+      )}
     </div>
   );
 }
