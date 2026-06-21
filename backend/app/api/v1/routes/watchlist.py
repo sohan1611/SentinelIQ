@@ -1,14 +1,16 @@
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from app.api.deps import get_db, get_current_user
+from app.api.middleware.rate_limit import client_ip
 from app.models.user import User
 from app.models.company import Company
 from app.models.watchlist import WatchlistItem
 from app.models.analysis_result import AnalysisResult
 from app.schemas.watchlist import WatchlistRequest, WatchlistItemResponse
+from app.services.audit_log import log_action
 
 router = APIRouter()
 
@@ -42,42 +44,44 @@ async def get_watchlist(db: AsyncSession = Depends(get_db), current_user: User =
     return response
 
 @router.post("/")
-async def add_to_watchlist(request: WatchlistRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def add_to_watchlist(request: WatchlistRequest, http_request: Request, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     ticker = request.ticker.upper()
     comp_res = await db.execute(select(Company).where(Company.ticker == ticker))
     company = comp_res.scalars().first()
-    
+
     if not company:
         raise HTTPException(status_code=404, detail="Company not found. Search for it first to initialize.")
-        
+
     check_res = await db.execute(
         select(WatchlistItem).where(WatchlistItem.user_id == current_user.id, WatchlistItem.company_id == company.id)
     )
     if check_res.scalars().first():
         raise HTTPException(status_code=409, detail="Company already in watchlist")
-        
+
     item = WatchlistItem(user_id=current_user.id, company_id=company.id)
     db.add(item)
+    log_action(db, current_user.id, "watchlist_add", detail={"ticker": ticker}, ip_address=client_ip(http_request))
     await db.commit()
-    
+
     return {"message": "Added to watchlist"}
 
 @router.delete("/{ticker}")
-async def remove_from_watchlist(ticker: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def remove_from_watchlist(ticker: str, http_request: Request, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     ticker = ticker.upper()
     comp_res = await db.execute(select(Company).where(Company.ticker == ticker))
     company = comp_res.scalars().first()
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
-        
+
     check_res = await db.execute(
         select(WatchlistItem).where(WatchlistItem.user_id == current_user.id, WatchlistItem.company_id == company.id)
     )
     item = check_res.scalars().first()
     if not item:
         raise HTTPException(status_code=404, detail="Company not in watchlist")
-        
+
     await db.delete(item)
+    log_action(db, current_user.id, "watchlist_remove", detail={"ticker": ticker}, ip_address=client_ip(http_request))
     await db.commit()
-    
+
     return {"message": "Removed from watchlist"}

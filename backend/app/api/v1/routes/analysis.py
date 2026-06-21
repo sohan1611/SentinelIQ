@@ -1,18 +1,19 @@
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import func
 
 from app.api.deps import get_db, get_current_user
-from app.api.middleware.rate_limit import rate_limit
+from app.api.middleware.rate_limit import rate_limit, client_ip
 from app.models.user import User
 from app.models.company import Company
 from app.models.analysis_result import AnalysisResult
 from app.models.analysis_run import AnalysisRun
 from app.models.red_flag import RedFlag
 from app.schemas.analysis import AnalysisRunRequest, AnalysisRunResponse, AnalysisStatusResponse, AnalysisResultResponse, AnalysisHistoryItem, RedFlagResponse, CompareItemResponse
+from app.services.audit_log import log_action
 from app.tasks.analysis_worker import run_full_analysis
 
 router = APIRouter()
@@ -40,6 +41,7 @@ def _free_tier_usage_query(user_id, since):
 @router.post("/run", response_model=AnalysisRunResponse, dependencies=[Depends(rate_limit("analysis_run", 20))])
 async def run_analysis(
     request: AnalysisRunRequest,
+    http_request: Request,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -95,6 +97,7 @@ async def run_analysis(
         analysis_result_id=analysis.id,
         counted=not is_cache_hit,
     ))
+    log_action(db, current_user.id, "analysis_run", detail={"ticker": ticker}, ip_address=client_ip(http_request))
     await db.commit()
 
     return {"analysis_id": analysis.id, "status": analysis.status}

@@ -25,14 +25,14 @@ def _db_with_existing_user():
 async def test_duplicate_email_raises_400():
     user_in = UserCreate(email="taken@example.com", password="secret123", full_name="Test")
     with pytest.raises(HTTPException) as exc_info:
-        await register(user_in=user_in, response=MagicMock(), db=_db_with_existing_user())
+        await register(user_in=user_in, request=MagicMock(), response=MagicMock(), db=_db_with_existing_user())
     assert exc_info.value.status_code == 400
 
 
 async def test_duplicate_email_message_does_not_reveal_existence():
     user_in = UserCreate(email="taken@example.com", password="secret123", full_name="Test")
     with pytest.raises(HTTPException) as exc_info:
-        await register(user_in=user_in, response=MagicMock(), db=_db_with_existing_user())
+        await register(user_in=user_in, request=MagicMock(), response=MagicMock(), db=_db_with_existing_user())
 
     detail = str(exc_info.value.detail).lower()
     assert "already exists" not in detail
@@ -42,6 +42,6 @@ async def test_duplicate_email_message_does_not_reveal_existence():
 async def test_duplicate_email_returns_generic_message():
     user_in = UserCreate(email="taken@example.com", password="secret123", full_name="Test")
     with pytest.raises(HTTPException) as exc_info:
-        await register(user_in=user_in, response=MagicMock(), db=_db_with_existing_user())
+        await register(user_in=user_in, request=MagicMock(), response=MagicMock(), db=_db_with_existing_user())
 
     assert "unavailable" in str(exc_info.value.detail).lower()
