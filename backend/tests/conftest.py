@@ -1,6 +1,7 @@
 import pytest
 
 from app.models.financial_data import FinancialData
+from app.models.edgar_fact import EdgarFinancialFact
 
 
 @pytest.fixture
@@ -26,5 +27,28 @@ def make_financial_data():
         )
         defaults.update(kwargs)
         return FinancialData(period=period, **defaults)
+
+    return _make
+
+
+@pytest.fixture
+def make_edgar_fact():
+    """Factory for in-memory EdgarFinancialFact rows (no DB session required).
+
+    make_edgar_fact("NetIncomeLoss", "2007-09-29", 3496000000, form="10-K",
+                     filed="2009-10-27", accn="...", start="2006-10-01")
+    """
+
+    def _make(concept: str, period_end: str, value: float, *, form: str,
+              filed: str, accn: str, start: str | None = None) -> EdgarFinancialFact:
+        return EdgarFinancialFact(
+            concept=concept,
+            period_start=start,
+            period_end=period_end,
+            value=value,
+            form_type=form,
+            filed_date=filed,
+            accession_number=accn,
+        )
 
     return _make
