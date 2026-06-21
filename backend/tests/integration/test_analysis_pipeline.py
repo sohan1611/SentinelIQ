@@ -20,6 +20,7 @@ from app.models.financial_data import FinancialData
 from app.models.red_flag import RedFlag
 from app.models.narrative_snapshot import NarrativeSnapshot
 from app.models.report import Report
+from app.models.edgar_fact import EdgarFinancialFact
 from app.tasks import analysis_worker
 
 import pytest
@@ -178,6 +179,9 @@ async def test_happy_path_completes_with_full_module_details(monkeypatch, compan
     monkeypatch.setattr(analysis_worker, "GovernanceScorer", lambda: FakeGovernanceScorer(GOV_RESULT))
     monkeypatch.setattr(analysis_worker, "ConsistencyEngine", lambda: FakeConsistencyEngine(NARRATIVE_RESULT))
     monkeypatch.setattr(analysis_worker, "ReportGenerator", lambda: FakeReportGenerator("# Report\nAll good."))
+    # No EDGAR coverage for the fictional "ACME" ticker -- Phase 36's restatement
+    # check must degrade gracefully without affecting any other stage's scores.
+    monkeypatch.setattr(analysis_worker, "fetch_all_concept_histories", AsyncMock(return_value=None))
 
     await analysis_worker.run_full_analysis(company.id, analysis.id)
 
@@ -209,6 +213,9 @@ async def test_happy_path_completes_with_full_module_details(monkeypatch, compan
          "description": "Significant tone shift between 2023-01 and 2023-02 (Score diff: 1.40)"}
     ]
 
+    # --- Restatement check (Phase 36): no EDGAR coverage for this ticker ---
+    assert analysis.module_details["restatement_check"] == {"coverage": False, "facts_checked": 0}
+
     # --- Persisted rows ------------------------------------------------------
     added_by_type = {}
     for obj in fake_session.added:
@@ -238,6 +245,7 @@ async def test_governance_stage_failure_does_not_abort_pipeline(monkeypatch, com
     # < 2 statements -> _stage_narrative short-circuits to 50.0 without calling ConsistencyEngine.
     monkeypatch.setattr(analysis_worker, "fetch_news_statements", AsyncMock(return_value=[]))
     monkeypatch.setattr(analysis_worker, "ReportGenerator", lambda: FakeReportGenerator("# Report\nDegraded."))
+    monkeypatch.setattr(analysis_worker, "fetch_all_concept_histories", AsyncMock(return_value=None))
 
     await analysis_worker.run_full_analysis(company.id, analysis.id)
 
@@ -272,6 +280,7 @@ async def test_run_full_analysis_logs_carry_correlation_id(monkeypatch, company,
     monkeypatch.setattr(analysis_worker, "GovernanceScorer", lambda: FakeGovernanceScorer(GOV_RESULT))
     monkeypatch.setattr(analysis_worker, "ConsistencyEngine", lambda: FakeConsistencyEngine(NARRATIVE_RESULT))
     monkeypatch.setattr(analysis_worker, "ReportGenerator", lambda: FakeReportGenerator("# Report\nAll good."))
+    monkeypatch.setattr(analysis_worker, "fetch_all_concept_histories", AsyncMock(return_value=None))
 
     with caplog.at_level(logging.INFO, logger="app.tasks.analysis_worker"):
         await analysis_worker.run_full_analysis(company.id, analysis.id)
@@ -285,3 +294,87 @@ async def test_run_full_analysis_logs_carry_correlation_id(monkeypatch, company,
     assert len(complete) == 1
     assert complete[0].correlation_id == str(analysis.id)
     assert complete[0].ticker == "ACME"
+
+
+# Shaped like the real Apple FY2007 NetIncomeLoss restatement already verified
+# live against the real SEC EDGAR API in Phase 34/35 -- a genuine 10-K/A
+# changing a previously filed figure for the identical period.
+EDGAR_HISTORIES_WITH_RESTATEMENT = {
+    "net_income": [
+        {"start": "2006-10-01", "end": "2007-09-29", "val": 3496000000.0,
+         "accn": "accn1", "form": "10-K", "filed": "2009-10-27"},
+        {"start": "2006-10-01", "end": "2007-09-29", "val": 3495000000.0,
+         "accn": "accn2", "form": "10-K/A", "filed": "2010-01-25"},
+    ],
+    "revenue": [], "operating_cf": [], "total_assets": [], "accounts_recv": [], "total_debt_approx": [],
+}
+
+
+async def test_restatement_check_creates_flag_without_touching_scores(monkeypatch, company, analysis, fake_session):
+    # Phase 36: when EDGAR coverage exists and detect_restatements finds
+    # something, it must surface as a RedFlag, persist EdgarFinancialFact
+    # rows, and set the coverage marker -- all without affecting any
+    # fraud_scorer.py score (flag-only, per the 2026-06-21 owner decision).
+    monkeypatch.setattr(analysis_worker, "fetch_financials", AsyncMock(return_value=FINANCIALS))
+    monkeypatch.setattr(analysis_worker, "fetch_news_text", AsyncMock(return_value="Acme reports record quarter."))
+    monkeypatch.setattr(analysis_worker, "fetch_news_sentiment", AsyncMock(return_value=65.0))
+    monkeypatch.setattr(analysis_worker, "fetch_news_statements", AsyncMock(return_value=NARRATIVE_STATEMENTS))
+    monkeypatch.setattr(analysis_worker, "GovernanceScorer", lambda: FakeGovernanceScorer(GOV_RESULT))
+    monkeypatch.setattr(analysis_worker, "ConsistencyEngine", lambda: FakeConsistencyEngine(NARRATIVE_RESULT))
+    monkeypatch.setattr(analysis_worker, "ReportGenerator", lambda: FakeReportGenerator("# Report\nAll good."))
+    monkeypatch.setattr(
+        analysis_worker, "fetch_all_concept_histories",
+        AsyncMock(return_value=EDGAR_HISTORIES_WITH_RESTATEMENT),
+    )
+
+    await analysis_worker.run_full_analysis(company.id, analysis.id)
+
+    assert analysis.status == "complete"
+    assert analysis.module_details["restatement_check"] == {"coverage": True, "facts_checked": 2}
+
+    added_by_type = {}
+    for obj in fake_session.added:
+        added_by_type.setdefault(type(obj), []).append(obj)
+
+    assert len(added_by_type[EdgarFinancialFact]) == 2
+
+    flag_types = [f.flag_type for f in added_by_type[RedFlag]]
+    assert "restatement" in flag_types
+    restatement_flags = [f for f in added_by_type[RedFlag] if f.flag_type == "restatement"]
+    assert len(restatement_flags) == 1
+    assert restatement_flags[0].period == "2007-09-29"
+    assert "10-K/A" in restatement_flags[0].description
+
+    # Flag-only: confirm this doesn't perturb the same scores/confidence the
+    # happy-path test pins (no restatement weight exists in fraud_scorer.py).
+    assert analysis.module_details["scores"]["financial"] is not None
+    assert analysis.module_details["confidence"] == "high"
+
+
+async def test_restatement_check_runs_even_when_yfinance_has_no_data(monkeypatch, company, analysis, fake_session):
+    # Regression test: _stage_forensics used to `return` early when
+    # financial_records was empty (yfinance rate-limited/unavailable -- the
+    # documented, frequently-occurring A1 issue in this exact deployment),
+    # which skipped the entire restatement check below it since `return`
+    # exits the whole function, not just the empty-data branch. Caught live
+    # against the real backend during Phase 36 verification, not by this
+    # mocked suite -- the EDGAR check is unrelated to yfinance and must run
+    # regardless of whether financial data was available.
+    monkeypatch.setattr(analysis_worker, "fetch_financials", AsyncMock(return_value=[]))
+    monkeypatch.setattr(analysis_worker, "fetch_news_text", AsyncMock(return_value="Acme reports record quarter."))
+    monkeypatch.setattr(analysis_worker, "fetch_news_sentiment", AsyncMock(return_value=65.0))
+    monkeypatch.setattr(analysis_worker, "fetch_news_statements", AsyncMock(return_value=[]))
+    monkeypatch.setattr(analysis_worker, "ReportGenerator", lambda: FakeReportGenerator("# Report\nDegraded."))
+    monkeypatch.setattr(
+        analysis_worker, "fetch_all_concept_histories",
+        AsyncMock(return_value=EDGAR_HISTORIES_WITH_RESTATEMENT),
+    )
+
+    await analysis_worker.run_full_analysis(company.id, analysis.id)
+
+    assert analysis.status == "complete"
+    assert analysis.module_details["scores"].get("financial") is None  # no yfinance data, as expected
+    assert analysis.module_details["restatement_check"] == {"coverage": True, "facts_checked": 2}
+
+    flag_types = [f.flag_type for f in fake_session.added if isinstance(f, RedFlag)]
+    assert "restatement" in flag_types
