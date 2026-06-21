@@ -13,10 +13,13 @@ from app.models.financial_data import FinancialData
 from app.models.red_flag import RedFlag
 from app.models.narrative_snapshot import NarrativeSnapshot
 from app.models.report import Report
+from app.models.edgar_fact import EdgarFinancialFact
 
 from app.services.yahoo_finance import fetch_financials
 from app.services.news_aggregator import fetch_news_sentiment, fetch_news_text, fetch_news_statements
+from app.services.sec_edgar import fetch_all_concept_histories
 from app.core.forensics.forensics_runner import ForensicsRunner
+from app.core.forensics.restatement_detector import detect_restatements
 from app.core.governance.governance_scorer import GovernanceScorer
 from app.core.narrative.consistency_engine import ConsistencyEngine
 from app.core.scoring.fraud_scorer import FraudScorer
@@ -53,6 +56,8 @@ class StageContext:
     governance_provenance: dict = field(default_factory=dict)
     governance_flags: list = field(default_factory=list)
     financial_data_status: str = "ok"
+    edgar_coverage: bool = False
+    edgar_facts_checked: int = 0
 
 
 @dataclass
@@ -88,33 +93,32 @@ async def _stage_forensics(ctx: StageContext):
             ctx.scores["cashflow"] = None
             ctx.scores["earnings"] = None
             ctx.scores["debt"] = None
-            return
+        else:
+            forensics_res = ForensicsRunner().run_forensics(ctx.financial_records)
+            revenue_score = forensics_res["revenue"].score
+            debt_score = forensics_res["debt"].score
+            ctx.scores["financial"] = (revenue_score + debt_score) / 2
+            ctx.scores["cashflow"] = forensics_res["cashflow"].score
+            ctx.scores["earnings"] = forensics_res["earnings"].score
+            ctx.scores["debt"] = debt_score
 
-        forensics_res = ForensicsRunner().run_forensics(ctx.financial_records)
-        revenue_score = forensics_res["revenue"].score
-        debt_score = forensics_res["debt"].score
-        ctx.scores["financial"] = (revenue_score + debt_score) / 2
-        ctx.scores["cashflow"] = forensics_res["cashflow"].score
-        ctx.scores["earnings"] = forensics_res["earnings"].score
-        ctx.scores["debt"] = debt_score
+            ctx.forensics_details["revenue"] = forensics_res["revenue"].details
+            ctx.forensics_details["cashflow"] = forensics_res["cashflow"].details
+            ctx.forensics_details["earnings"] = forensics_res["earnings"].details
+            ctx.forensics_details["debt"] = forensics_res["debt"].details
 
-        ctx.forensics_details["revenue"] = forensics_res["revenue"].details
-        ctx.forensics_details["cashflow"] = forensics_res["cashflow"].details
-        ctx.forensics_details["earnings"] = forensics_res["earnings"].details
-        ctx.forensics_details["debt"] = forensics_res["debt"].details
-
-        for f in forensics_res["all_flags"]:
-            flag_rec = RedFlag(
-                analysis_id=ctx.analysis_id,
-                company_id=ctx.company_id,
-                flag_type=f.flag_type,
-                severity=f.severity,
-                description=f.description,
-                period=f.period,
-            )
-            ctx.session.add(flag_rec)
-            ctx.all_flags.append(flag_rec)
-        await ctx.session.commit()
+            for f in forensics_res["all_flags"]:
+                flag_rec = RedFlag(
+                    analysis_id=ctx.analysis_id,
+                    company_id=ctx.company_id,
+                    flag_type=f.flag_type,
+                    severity=f.severity,
+                    description=f.description,
+                    period=f.period,
+                )
+                ctx.session.add(flag_rec)
+                ctx.all_flags.append(flag_rec)
+            await ctx.session.commit()
     except Exception as e:
         ctx.log.error(f"Stage forensics failed: {e}", extra={"stage": "forensics"})
         await ctx.session.rollback()
@@ -122,6 +126,49 @@ async def _stage_forensics(ctx: StageContext):
         ctx.scores["cashflow"] = None
         ctx.scores["earnings"] = None
         ctx.scores["debt"] = None
+
+    # Restatement Detector (Phase 35/36) -- flag-only, no score impact (see
+    # MASTER_IMPLEMENTATION_PLAN.md Phase 35 owner decision). Isolated in its
+    # own try/except: an EDGAR fetch failure or no-coverage case must never
+    # wipe out the yfinance-based forensic scores set above.
+    try:
+        histories = await fetch_all_concept_histories(ctx.company.ticker)
+        if histories:
+            ctx.edgar_coverage = True
+            facts: list[EdgarFinancialFact] = []
+            for concept, entries in histories.items():
+                for e in entries:
+                    fact = EdgarFinancialFact(
+                        company_id=ctx.company_id,
+                        concept=concept,
+                        period_start=e.get("start"),
+                        period_end=e["end"],
+                        value=e["val"],
+                        accession_number=e["accn"],
+                        form_type=e["form"],
+                        filed_date=e["filed"],
+                    )
+                    ctx.session.add(fact)
+                    facts.append(fact)
+            ctx.edgar_facts_checked = len(facts)
+
+            for rf in detect_restatements(facts):
+                flag_rec = RedFlag(
+                    analysis_id=ctx.analysis_id,
+                    company_id=ctx.company_id,
+                    flag_type=rf.flag_type,
+                    severity=rf.severity,
+                    description=rf.description,
+                    period=rf.period,
+                )
+                ctx.session.add(flag_rec)
+                ctx.all_flags.append(flag_rec)
+            await ctx.session.commit()
+    except Exception as e:
+        ctx.log.error(f"Restatement check failed: {e}", extra={"stage": "forensics"})
+        await ctx.session.rollback()
+        ctx.edgar_coverage = False
+        ctx.edgar_facts_checked = 0
 
 
 async def _stage_governance(ctx: StageContext):
@@ -228,6 +275,10 @@ async def _stage_score_persist(ctx: StageContext):
                 "flags": ctx.governance_flags,
             },
             "financial_data_status": ctx.financial_data_status if ctx.financial_data_status != "ok" else None,
+            "restatement_check": {
+                "coverage": ctx.edgar_coverage,
+                "facts_checked": ctx.edgar_facts_checked,
+            },
         }).model_dump()
         await ctx.session.commit()
     except Exception as e:
