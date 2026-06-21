@@ -15,7 +15,7 @@ _WINDOW_SECS = 60
 _windows: dict[tuple[str, str], list[float]] = defaultdict(list)
 
 
-def _client_ip(request: Request) -> str:
+def client_ip(request: Request) -> str:
     xff = request.headers.get("x-forwarded-for")
     if xff:
         return xff.split(",")[0].strip()
@@ -31,7 +31,7 @@ def rate_limit(key: str, limit: int, window_secs: int = _WINDOW_SECS) -> Callabl
         window_secs: Rolling window duration in seconds (default 60).
     """
     async def _check(request: Request) -> None:
-        ip = _client_ip(request)
+        ip = client_ip(request)
         bucket = (ip, key)
         now = datetime.now(timezone.utc).timestamp()
         cutoff = now - window_secs
