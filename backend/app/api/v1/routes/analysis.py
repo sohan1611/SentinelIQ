@@ -12,7 +12,7 @@ from app.models.company import Company
 from app.models.analysis_result import AnalysisResult
 from app.models.analysis_run import AnalysisRun
 from app.models.red_flag import RedFlag
-from app.schemas.analysis import AnalysisRunRequest, AnalysisRunResponse, AnalysisStatusResponse, AnalysisResultResponse, AnalysisHistoryItem, RedFlagResponse
+from app.schemas.analysis import AnalysisRunRequest, AnalysisRunResponse, AnalysisStatusResponse, AnalysisResultResponse, AnalysisHistoryItem, RedFlagResponse, CompareItemResponse
 from app.tasks.analysis_worker import run_full_analysis
 
 router = APIRouter()
@@ -20,6 +20,7 @@ router = APIRouter()
 FREE_TIER_MONTHLY_LIMIT = 5
 ANALYSIS_CACHE_TTL = timedelta(hours=6)
 ANALYSIS_HISTORY_LIMIT = 24
+COMPARE_MAX_TICKERS = 5
 
 
 def _free_tier_usage_query(user_id, since):
@@ -97,6 +98,56 @@ async def run_analysis(
     await db.commit()
 
     return {"analysis_id": analysis.id, "status": analysis.status}
+
+
+@router.get("/compare", response_model=list[CompareItemResponse])
+async def compare_analyses(tickers: str, db: AsyncSession = Depends(get_db)):
+    """Phase 37 (F5, scoped to a comparison view): each requested ticker's
+    latest completed analysis, side by side. Read-only over data that
+    already exists -- no scoring changes, no new tables."""
+    ticker_list = [t.strip().upper() for t in tickers.split(",") if t.strip()]
+    if len(ticker_list) < 2:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": {"code": "TOO_FEW_TICKERS", "message": "Provide at least 2 tickers to compare."}},
+        )
+    if len(ticker_list) > COMPARE_MAX_TICKERS:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": {"code": "TOO_MANY_TICKERS", "message": f"Compare up to {COMPARE_MAX_TICKERS} companies at once."}},
+        )
+
+    results: list[CompareItemResponse] = []
+    for ticker in ticker_list:
+        comp_res = await db.execute(select(Company).where(Company.ticker == ticker))
+        company = comp_res.scalars().first()
+        if not company:
+            results.append(CompareItemResponse(ticker=ticker, found=False))
+            continue
+
+        analysis_res = await db.execute(
+            select(AnalysisResult)
+            .where(AnalysisResult.company_id == company.id, AnalysisResult.status == "complete")
+            .order_by(AnalysisResult.run_at.desc())
+            .limit(1)
+        )
+        analysis = analysis_res.scalars().first()
+        if not analysis:
+            results.append(CompareItemResponse(ticker=ticker, company_name=company.name, found=True, analysis=None))
+            continue
+
+        flag_count_res = await db.execute(select(func.count(RedFlag.id)).where(RedFlag.analysis_id == analysis.id))
+        flag_count = flag_count_res.scalar() or 0
+
+        results.append(CompareItemResponse(
+            ticker=ticker,
+            company_name=company.name,
+            found=True,
+            red_flag_count=flag_count,
+            analysis=AnalysisResultResponse.model_validate(analysis),
+        ))
+
+    return results
 
 
 @router.get("/{analysis_id}/status", response_model=AnalysisStatusResponse)

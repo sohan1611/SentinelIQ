@@ -7,6 +7,7 @@ export const ROUTES = {
   dashboard: "/dashboard",
   search: "/search",
   watchlist: "/watchlist",
+  compare: "/compare",
   settings: "/settings",
   company: (ticker: string) => `/company/${ticker}`,
   companyFinancials: (ticker: string) => `/company/${ticker}/financials`,

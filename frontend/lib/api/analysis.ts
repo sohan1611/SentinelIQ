@@ -1,5 +1,5 @@
 import { apiRequest } from "./client"
-import type { AnalysisRunResponse, AnalysisStatus, AnalysisResultWithFlags, AnalysisHistoryItem } from "@/types/analysis"
+import type { AnalysisRunResponse, AnalysisStatus, AnalysisResultWithFlags, AnalysisHistoryItem, CompareItem } from "@/types/analysis"
 
 export function runAnalysis(ticker: string): Promise<AnalysisRunResponse> {
   return apiRequest<AnalysisRunResponse>("/analysis/run", {
@@ -18,4 +18,8 @@ export function getLatestAnalysis(ticker: string): Promise<AnalysisResultWithFla
 
 export function getAnalysisHistory(ticker: string): Promise<AnalysisHistoryItem[]> {
   return apiRequest<AnalysisHistoryItem[]>(`/analysis/company/${encodeURIComponent(ticker)}/history`)
+}
+
+export function compareAnalyses(tickers: string[]): Promise<CompareItem[]> {
+  return apiRequest<CompareItem[]>(`/analysis/compare?tickers=${encodeURIComponent(tickers.join(","))}`)
 }
