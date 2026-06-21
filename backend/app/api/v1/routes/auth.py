@@ -1,18 +1,19 @@
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 import bcrypt
-from jose import jwt
+from jose import jwt, JWTError
 
 from app.api.deps import get_db, get_current_user
-from app.api.middleware.rate_limit import rate_limit
+from app.api.middleware.rate_limit import rate_limit, client_ip
 from app.config import settings
 from app.models.user import User
 from app.schemas.user import UserCreate, UserResponse
+from app.services.audit_log import log_action
 
 router = APIRouter()
 
@@ -52,7 +53,7 @@ def _set_auth_cookie(response: Response, token: str) -> None:
 
 
 @router.post("/register", dependencies=[Depends(rate_limit("register", 5))])
-async def register(user_in: UserCreate, response: Response, db: AsyncSession = Depends(get_db)):
+async def register(user_in: UserCreate, request: Request, response: Response, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.email == user_in.email))
     user = result.scalars().first()
     if user:
@@ -73,11 +74,13 @@ async def register(user_in: UserCreate, response: Response, db: AsyncSession = D
         user.id, expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     )
     _set_auth_cookie(response, token)
+    log_action(db, user.id, "register", ip_address=client_ip(request))
+    await db.commit()
     return {"status": "ok"}
 
 
 @router.post("/login", dependencies=[Depends(rate_limit("login", 10))])
-async def login(response: Response, db: AsyncSession = Depends(get_db), form_data: OAuth2PasswordRequestForm = Depends()):
+async def login(request: Request, response: Response, db: AsyncSession = Depends(get_db), form_data: OAuth2PasswordRequestForm = Depends()):
     result = await db.execute(select(User).where(User.email == form_data.username))
     user = result.scalars().first()
     if not user or not verify_password(form_data.password, user.hashed_pw):
@@ -89,11 +92,32 @@ async def login(response: Response, db: AsyncSession = Depends(get_db), form_dat
         user.id, expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     )
     _set_auth_cookie(response, token)
+    log_action(db, user.id, "login", ip_address=client_ip(request))
+    await db.commit()
     return {"status": "ok"}
 
 
 @router.post("/logout")
-async def logout(response: Response):
+async def logout(
+    request: Request,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+    sentineliq_token: Optional[str] = Cookie(None),
+):
+    # Best-effort: log who logged out if the token is still decodable, but
+    # never let a missing/expired/invalid token block clearing the cookie --
+    # logout must stay idempotent regardless of session state (unlike
+    # get_current_user, which intentionally raises 401 for every other route).
+    if sentineliq_token:
+        try:
+            payload = jwt.decode(sentineliq_token, settings.SECRET_KEY, algorithms=["HS256"])
+            user_id = payload.get("sub")
+            if user_id:
+                log_action(db, user_id, "logout", ip_address=client_ip(request))
+                await db.commit()
+        except JWTError:
+            pass
+
     response.delete_cookie(key="sentineliq_token", path="/")
     return {"status": "ok"}
 

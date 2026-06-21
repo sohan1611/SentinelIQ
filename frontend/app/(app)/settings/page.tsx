@@ -1,11 +1,15 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useAuth } from "@/contexts/AuthContext";
+import { getAuditLog } from "@/lib/api/auditLog";
+import { formatRelativeTime } from "@/lib/utils/formatDate";
+import { ApiError } from "@/types/api";
+import type { AuditLogEntry } from "@/types/auditLog";
 
-type Tab = "account" | "notifications" | "plan" | "api";
+type Tab = "account" | "activity" | "notifications" | "plan" | "api";
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<Tab>("account");
@@ -13,11 +17,12 @@ export default function SettingsPage() {
   return (
     <div className="w-full max-w-[800px]">
       <h1 className="font-sans text-[22px] font-semibold text-[#1A1A18] mb-6">Settings</h1>
-      
+
       <div className="flex items-center border-b border-[#E3DFD8] mb-8">
-        {(["account", "notifications", "plan", "api"] as Tab[]).map((tab) => {
+        {(["account", "activity", "notifications", "plan", "api"] as Tab[]).map((tab) => {
           const labels: Record<Tab, string> = {
             account: "Account",
+            activity: "Activity",
             notifications: "Notifications",
             plan: "Plan",
             api: "API Access",
@@ -41,6 +46,7 @@ export default function SettingsPage() {
 
       <div className="flex flex-col gap-8">
         {activeTab === "account" && <AccountTab />}
+        {activeTab === "activity" && <ActivityTab />}
         {activeTab === "notifications" && <NotificationsTab />}
         {activeTab === "plan" && <PlanTab />}
         {activeTab === "api" && (
@@ -179,6 +185,77 @@ function AccountTab() {
         </div>
       </section>
     </>
+  );
+}
+
+const ACTION_LABELS: Record<string, string> = {
+  register: "Account created",
+  login: "Signed in",
+  logout: "Signed out",
+  analysis_run: "Ran analysis",
+  watchlist_add: "Added to watchlist",
+  watchlist_remove: "Removed from watchlist",
+};
+
+function describeAction(entry: AuditLogEntry): string {
+  const label = ACTION_LABELS[entry.action] ?? entry.action;
+  const ticker = entry.detail && typeof entry.detail.ticker === "string" ? entry.detail.ticker : null;
+  return ticker ? `${label} — ${ticker}` : label;
+}
+
+function ActivityTab() {
+  const [entries, setEntries] = useState<AuditLogEntry[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getAuditLog()
+      .then((data) => { if (!cancelled) setEntries(data); })
+      .catch((err) => { if (!cancelled) setError(err instanceof ApiError ? err.message : "Failed to load activity."); });
+    return () => { cancelled = true; };
+  }, []);
+
+  return (
+    <section className="bg-[#FFFFFF] border border-[#E3DFD8] rounded-[8px] overflow-hidden">
+      <div className="p-6 pb-4">
+        <h2 className="font-sans text-[10px] font-medium uppercase tracking-[0.08em] text-[#7A786F] mb-2">ACCOUNT ACTIVITY</h2>
+        <p className="font-sans text-[12px] text-[#B0ADA7]">Security-relevant actions on your account, most recent first.</p>
+      </div>
+
+      {error ? (
+        <div className="px-6 pb-6">
+          <div className="font-sans text-[13px] text-[#B03028]">{error}</div>
+        </div>
+      ) : entries === null ? (
+        <div className="flex flex-col">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="flex items-center px-6 h-[52px] border-t border-[#E3DFD8]">
+              <Skeleton className="w-[40%] h-[14px] mr-4" />
+              <Skeleton className="w-[20%] h-[14px] mr-4" />
+              <Skeleton className="w-[20%] h-[14px]" />
+            </div>
+          ))}
+        </div>
+      ) : entries.length === 0 ? (
+        <div className="px-6 pb-6">
+          <p className="font-sans text-[13px] text-[#7A786F]">No activity recorded yet.</p>
+        </div>
+      ) : (
+        <div className="flex flex-col divide-y divide-[#E3DFD8]">
+          {entries.map((entry) => (
+            <div key={entry.id} className="px-6 py-4 flex items-center justify-between gap-4">
+              <div className="font-sans text-[14px] text-[#1A1A18]">{describeAction(entry)}</div>
+              <div className="flex items-center gap-4 shrink-0">
+                {entry.ip_address && (
+                  <span className="font-mono text-[12px] text-[#B0ADA7]">{entry.ip_address}</span>
+                )}
+                <span className="font-sans text-[12px] text-[#7A786F]">{formatRelativeTime(entry.created_at)}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
