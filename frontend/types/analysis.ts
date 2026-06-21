@@ -122,6 +122,14 @@ export interface ModuleDetails {
   restatement_check?: RestatementCheckDetails;
 }
 
+export interface CompareItem {
+  ticker: string;
+  company_name: string | null;
+  found: boolean;
+  analysis: AnalysisResult | null;
+  red_flag_count: number;
+}
+
 export interface AnalysisResult {
   id: string;
   company_id: string;

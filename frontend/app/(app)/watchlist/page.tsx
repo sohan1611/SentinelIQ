@@ -16,11 +16,16 @@ import { ROUTES } from "@/lib/constants/routes"
 import { ApiError } from "@/types/api"
 import { useToast } from "@/contexts/ToastContext"
 
+// Phase 37 (F5, scoped to a comparison view): UI cap matching the backend's
+// COMPARE_MAX_TICKERS -- real estate, not a technical limit.
+const COMPARE_MAX = 5
+
 export default function WatchlistPage() {
   const router = useRouter()
   const { items, isLoading, error, remove } = useWatchlist()
   const { showToast } = useToast()
   const [removeError, setRemoveError] = useState<string | null>(null)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
 
   const handleRemove = async (ticker: string, name: string) => {
     if (!window.confirm(`Remove ${name} from your watchlist?`)) return
@@ -33,15 +38,43 @@ export default function WatchlistPage() {
     }
   }
 
+  const toggleSelected = (ticker: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(ticker)) {
+        next.delete(ticker)
+      } else if (next.size < COMPARE_MAX) {
+        next.add(ticker)
+      }
+      return next
+    })
+  }
+
+  const handleCompare = () => {
+    router.push(`${ROUTES.compare}?tickers=${Array.from(selected).join(",")}`)
+  }
+
   return (
     <div className="w-full max-w-[1200px]">
 
       {/* Page Heading Row */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="font-sans text-[22px] font-semibold text-[#1A1A18]">Watchlist</h1>
-        <Button variant="secondary" className="!text-[13px]" onClick={() => router.push(ROUTES.search)}>
-          Add company +
-        </Button>
+        <div className="flex items-center gap-3">
+          {selected.size > 0 && (
+            <Button
+              variant="secondary"
+              className="!text-[13px]"
+              disabled={selected.size < 2}
+              onClick={handleCompare}
+            >
+              Compare Selected ({selected.size})
+            </Button>
+          )}
+          <Button variant="secondary" className="!text-[13px]" onClick={() => router.push(ROUTES.search)}>
+            Add company +
+          </Button>
+        </div>
       </div>
 
       {removeError && (
@@ -99,7 +132,8 @@ export default function WatchlistPage() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-[#E3DFD8]">
-                  <th className="w-[28%] py-3 px-4 text-[10px] font-sans font-medium uppercase tracking-[0.08em] text-[#7A786F]">COMPANY</th>
+                  <th className="w-[5%] py-3 px-4"></th>
+                  <th className="w-[23%] py-3 px-4 text-[10px] font-sans font-medium uppercase tracking-[0.08em] text-[#7A786F]">COMPANY</th>
                   <th className="w-[10%] py-3 px-4 text-[10px] font-sans font-medium uppercase tracking-[0.08em] text-[#7A786F]">TICKER</th>
                   <th className="w-[14%] py-3 px-4 text-[10px] font-sans font-medium uppercase tracking-[0.08em] text-[#7A786F]">INTEGRITY SCORE</th>
                   <th className="w-[15%] py-3 px-4 text-[10px] font-sans font-medium uppercase tracking-[0.08em] text-[#7A786F]">RISK LEVEL</th>
@@ -111,8 +145,21 @@ export default function WatchlistPage() {
                 {items.map((item, idx) => {
                   const score = item.latest_score
                   const analyzed = score !== null
+                  const ticker = item.company.ticker
+                  const isSelected = selected.has(ticker)
+                  const disableSelect = !isSelected && selected.size >= COMPARE_MAX
                   return (
                     <tr key={item.id} className={`h-[52px] hover:bg-[#F1EFE9] group ${idx !== items.length - 1 ? "border-b border-[#E3DFD8]" : ""}`}>
+                      <td className="px-4">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          disabled={disableSelect}
+                          onChange={() => toggleSelected(ticker)}
+                          aria-label={`Select ${item.company.name} for comparison`}
+                          className="w-[14px] h-[14px] accent-[#1C3558] disabled:opacity-30"
+                        />
+                      </td>
                       <td className="px-4 font-sans text-[14px] font-semibold text-[#1A1A18] truncate">{item.company.name}</td>
                       <td className="px-4 font-mono text-[12px] text-[#1C3558]">{item.company.ticker}</td>
                       <td className="px-4 font-mono text-[16px] font-bold">
