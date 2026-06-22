@@ -32,7 +32,9 @@ class FakeSession:
     .get() resolves against the rows passed at construction time;
     .add()/.commit()/.rollback() are recorded/no-ops. Mutations the pipeline
     makes to `company`/`analysis` (the same instances passed in) are visible
-    to the test via those original references.
+    to the test via those original references. .execute() is a no-op stand-in
+    for the bulk EDGAR-fact insert (Phase 41 / H-4) -- its return value is
+    never read by the pipeline, only awaited.
     """
 
     def __init__(self, *rows):
@@ -40,6 +42,7 @@ class FakeSession:
         for row in rows:
             self._by_type.setdefault(type(row), {})[row.id] = row
         self.added = []
+        self.executed = []
 
     async def get(self, model, id_):
         return self._by_type.get(model, {}).get(id_)
@@ -47,11 +50,29 @@ class FakeSession:
     def add(self, obj):
         self.added.append(obj)
 
+    async def execute(self, stmt):
+        self.executed.append(stmt)
+        return None
+
     async def commit(self):
         pass
 
     async def rollback(self):
         pass
+
+    @property
+    def inserted_row_count(self):
+        """Best-effort count of rows passed to a multi-row bulk INSERT (the
+        EDGAR-fact dedup path, Phase 41 / H-4 -- EdgarFinancialFact rows are
+        no longer added one-by-one via .add()). Pokes at SQLAlchemy's private
+        _multi_values since there's no public API to introspect an
+        unexecuted Core Insert's bound values without actually running it."""
+        total = 0
+        for stmt in self.executed:
+            multi = getattr(stmt, "_multi_values", None)
+            if multi:
+                total += len(multi[0])
+        return total
 
 
 class FakeSessionCtx:
@@ -336,7 +357,10 @@ async def test_restatement_check_creates_flag_without_touching_scores(monkeypatc
     for obj in fake_session.added:
         added_by_type.setdefault(type(obj), []).append(obj)
 
-    assert len(added_by_type[EdgarFinancialFact]) == 2
+    # EdgarFinancialFact rows are persisted via a deduped bulk insert, not
+    # one-by-one session.add() (Phase 41 / H-4) -- verify via the bulk
+    # statement's row count instead of fake_session.added.
+    assert fake_session.inserted_row_count == 2
 
     flag_types = [f.flag_type for f in added_by_type[RedFlag]]
     assert "restatement" in flag_types
