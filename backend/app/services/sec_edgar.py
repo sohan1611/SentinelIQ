@@ -141,19 +141,26 @@ def _total_debt_history(facts: dict) -> list[dict]:
 
 
 def extract_concept_history(facts: dict, concept_candidates: list[str]) -> list[dict]:
-    """Returns EVERY historical entry (every filing, every amendment) for the
-    first candidate concept found, not just the latest value -- this full
-    history, including duplicate periods with different filed values, is the
-    raw material Phase 35's restatement detector needs.
+    """Returns EVERY historical entry (every filing, every amendment) across
+    EVERY candidate concept tag that has data -- not just the first match.
+    A company's tag for the same logical figure can change era (e.g. a
+    pre-ASC-606 filer reports "Revenues", then switches to
+    "RevenueFromContractWithCustomerExcludingAssessedTax" after adopting
+    it) -- "first candidate wins" would silently drop every later era's
+    data the moment an earlier candidate has ANY entries (Phase 42 finding:
+    surfaced live on real MSFT data, where the old "Revenues" tag matched
+    first and silently discarded 131 entries of 2021-2025 revenue under the
+    newer tag). This full history, including duplicate periods with
+    different filed values, is the raw material Phase 35's restatement
+    detector and Phase 42's as-filed adapter both need.
 
     Each entry: {start, end, val, accn, form, filed} (frame is sometimes
     present too but not required downstream).
     """
     us_gaap = facts.get("facts", {}).get("us-gaap", {})
+    merged: list[dict] = []
     for concept in concept_candidates:
         if concept in us_gaap:
             units = us_gaap[concept].get("units", {})
-            usd_entries = units.get("USD", [])
-            if usd_entries:
-                return usd_entries
-    return []
+            merged.extend(units.get("USD", []))
+    return merged
