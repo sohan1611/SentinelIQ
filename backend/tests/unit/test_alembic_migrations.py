@@ -18,7 +18,7 @@ def _script_directory():
 
 def test_migration_chain_has_single_head():
     script = _script_directory()
-    assert script.get_heads() == ["0005"]
+    assert script.get_heads() == ["0006"]
 
 
 def test_migration_chain_has_single_base():
@@ -29,7 +29,7 @@ def test_migration_chain_has_single_base():
 def test_migrations_cover_every_registered_table():
     script = _script_directory()
     revisions = {rev.revision: rev for rev in script.walk_revisions()}
-    assert set(revisions) == {"0001", "0002", "0003", "0004", "0005"}
+    assert set(revisions) == {"0001", "0002", "0003", "0004", "0005", "0006"}
 
     created_tables = set()
     for rev in revisions.values():

@@ -3,6 +3,7 @@ import logging
 import time
 import feedparser
 from datetime import datetime, timedelta, timezone
+from urllib.parse import quote
 from app.services import cache
 
 logger = logging.getLogger(__name__)
@@ -10,18 +11,25 @@ logger = logging.getLogger(__name__)
 NEWS_FETCH_TIMEOUT_SECONDS = 15.0
 
 
-async def _fetch_google_news(ticker: str) -> list[dict]:
-    """Shared helper: Google News RSS for ticker → [{title, period}], cached 2h.
+async def _fetch_google_news(company_name: str, ticker: str) -> list[dict]:
+    """Shared helper: Google News RSS for company_name+ticker → [{title, period}], cached 2h.
 
     All three public fetch functions hit this feed; caching it avoids three
     separate feedparser.parse() calls for the same ticker in one analysis run.
+
+    Querying on company_name OR ticker (not the bare ticker alone) avoids
+    pulling unrelated stories for short/word-like tickers (e.g. F, ALL, ON,
+    KEY) that otherwise match many unconnected headlines -- a governance flag
+    "grounded" in an unrelated headline would get attributed to the wrong
+    company (Phase 39 / C-1 hardening).
     """
     cache_key = f"company:{ticker}:google_news_raw"
     cached = cache.get(cache_key)
     if cached is not None:
         return cached
 
-    url = f"https://news.google.com/rss/search?q={ticker}"
+    query = quote(f'"{company_name}" OR {ticker}')
+    url = f"https://news.google.com/rss/search?q={query}"
 
     def _fetch():
         items = []
@@ -55,7 +63,7 @@ async def fetch_news_sentiment(company_name: str, ticker: str) -> float:
     if cached is not None:
         return cached
 
-    google_items = await _fetch_google_news(ticker)
+    google_items = await _fetch_google_news(company_name, ticker)
 
     extra_feeds = [
         f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={ticker}",
@@ -121,7 +129,7 @@ async def fetch_news_statements(company_name: str, ticker: str, limit: int = 5) 
     if cached is not None:
         return cached
 
-    raw_items = (await _fetch_google_news(ticker))[:limit]
+    raw_items = (await _fetch_google_news(company_name, ticker))[:limit]
 
     statements = []
     for idx, item in enumerate(raw_items):
@@ -133,5 +141,5 @@ async def fetch_news_statements(company_name: str, ticker: str, limit: int = 5) 
 
 
 async def fetch_news_text(company_name: str, ticker: str) -> str:
-    raw_items = await _fetch_google_news(ticker)
+    raw_items = await _fetch_google_news(company_name, ticker)
     return "\n".join(item["title"] for item in raw_items)
