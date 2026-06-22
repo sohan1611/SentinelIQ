@@ -55,6 +55,15 @@ def test_quote_not_in_text_fails():
     assert not _is_grounded("independent director resigned over governance concerns", news)
 
 
+def test_short_verbatim_quote_fails_length_floor():
+    """A verbatim substring match alone isn't enough -- a quote must also
+    clear MIN_QUOTE_LENGTH to ground a real event (Phase 39 / GOV-3)."""
+    news = "Apple CFO resigned amid a broader leadership reshuffle this quarter."
+    quote = "CFO resigned"
+    assert quote in news  # genuinely verbatim -- isolates the length check, not the substring check
+    assert not _is_grounded(quote, news)
+
+
 # ---------------------------------------------------------------------------
 # GovernanceScorer.analyze grounding integration tests (mocked Gemini)
 # ---------------------------------------------------------------------------
@@ -98,7 +107,10 @@ async def test_grounded_event_is_kept():
         score, flags, provenance = await scorer.analyze("Apple Inc.", NEWS_TEXT)
 
     assert len(flags) == 1
-    assert flags[0]["description"] == "CFO resigned"
+    # The published claim is the grounded quote itself, not the model's free-form
+    # gloss of it (Phase 39 / C-1) -- the gloss survives separately as ai_summary.
+    assert flags[0]["description"] == GROUNDED_EVENT["source_quote"]
+    assert flags[0]["ai_summary"] == "CFO resigned"
     assert flags[0]["source_quote"] == GROUNDED_EVENT["source_quote"]
     assert score == 75.0  # 100 - 25 (high severity)
 
@@ -141,6 +153,30 @@ async def test_mixed_events_only_grounded_kept():
     assert len(flags) == 1
     assert flags[0]["source_quote"] == GROUNDED_EVENT["source_quote"]
     assert score == 75.0
+
+
+@pytest.mark.asyncio
+async def test_published_description_is_grounded_quote_with_ai_summary_preserved():
+    """Phase 39 / C-1: the claim published about a named company must be the
+    text that passed grounding, not the model's unverified free-form gloss.
+    The model's original characterization survives separately as ai_summary,
+    never as the primary description."""
+    provenance_stub = {
+        "text": "[]",
+        "prompt": "...",
+        "model_id": "gemini-2.5-flash",
+        "raw_response": None,
+    }
+    with patch(
+        "app.core.governance.governance_scorer.generate_json_with_provenance",
+        new=AsyncMock(return_value=([GROUNDED_EVENT], provenance_stub)),
+    ):
+        scorer = GovernanceScorer()
+        _, flags, _ = await scorer.analyze("Apple Inc.", NEWS_TEXT)
+
+    assert flags[0]["description"] == GROUNDED_EVENT["source_quote"]
+    assert flags[0]["description"] != GROUNDED_EVENT["description"]
+    assert flags[0]["ai_summary"] == GROUNDED_EVENT["description"]
 
 
 @pytest.mark.asyncio

@@ -4,7 +4,9 @@ from typing import Awaitable, Callable
 from uuid import UUID
 from datetime import datetime, timezone
 
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.database import AsyncSessionLocal
 from app.models.company import Company
@@ -136,21 +138,44 @@ async def _stage_forensics(ctx: StageContext):
         if histories:
             ctx.edgar_coverage = True
             facts: list[EdgarFinancialFact] = []
+            fact_rows: list[dict] = []
             for concept, entries in histories.items():
                 for e in entries:
-                    fact = EdgarFinancialFact(
-                        company_id=ctx.company_id,
-                        concept=concept,
-                        period_start=e.get("start"),
-                        period_end=e["end"],
-                        value=e["val"],
-                        accession_number=e["accn"],
-                        form_type=e["form"],
-                        filed_date=e["filed"],
-                    )
-                    ctx.session.add(fact)
-                    facts.append(fact)
+                    fact_data = {
+                        "company_id": ctx.company_id,
+                        "concept": concept,
+                        "period_start": e.get("start"),
+                        "period_end": e["end"],
+                        "value": e["val"],
+                        "accession_number": e["accn"],
+                        "form_type": e["form"],
+                        "filed_date": e["filed"],
+                    }
+                    fact_rows.append(fact_data)
+                    # In-memory only, for detect_restatements() below -- the
+                    # actual write is the deduped bulk insert further down,
+                    # not session.add() (Phase 41 / H-4: re-analyzing an
+                    # already-seen company must not duplicate its history).
+                    facts.append(EdgarFinancialFact(**fact_data))
             ctx.edgar_facts_checked = len(facts)
+
+            if fact_rows:
+                # index_elements, not constraint= -- Postgres's ON CONFLICT ON
+                # CONSTRAINT only matches a named table constraint, not a bare
+                # CREATE UNIQUE INDEX (confirmed live: constraint= raised
+                # UndefinedObjectError against the real DB, something no mock
+                # could have caught). index_elements matches by the index's
+                # actual column/expression definition instead.
+                stmt = pg_insert(EdgarFinancialFact).values(fact_rows).on_conflict_do_nothing(
+                    index_elements=[
+                        EdgarFinancialFact.company_id,
+                        EdgarFinancialFact.concept,
+                        func.coalesce(EdgarFinancialFact.period_start, ""),
+                        EdgarFinancialFact.period_end,
+                        EdgarFinancialFact.accession_number,
+                    ]
+                )
+                await ctx.session.execute(stmt)
 
             for rf in detect_restatements(facts):
                 flag_rec = RedFlag(
