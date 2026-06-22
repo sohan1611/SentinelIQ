@@ -114,6 +114,21 @@ class RestatementCheckDetails(BaseModel):
     facts_checked: int = 0
 
 
+class AsFiledModuleDetails(BaseModel):
+    """Phase 42 / C-2: a second, parallel score computed from SEC EDGAR's
+    as-originally-filed figures (earliest filed_date per period) instead of
+    yfinance's current restated view. Purely additive -- does not feed
+    fraud_scorer.py or the headline Integrity Score. coverage mirrors
+    restatement_check's same distinction: "EDGAR data existed to check"
+    versus "scores happened to be computed" -- a company with coverage but
+    fewer than 2 usable annual periods still has coverage=True, with scores
+    degrading to the forensic modules' own existing 50.0 fallback."""
+    coverage: bool = False
+    period_count: int = 0
+    scores: Dict[str, float] = {}
+    delta: Dict[str, float] = {}
+
+
 # ---------------------------------------------------------------------------
 # Versioned top-level container (schema_version = 0 means pre-Phase-15 row)
 # ---------------------------------------------------------------------------
@@ -130,6 +145,7 @@ class ModuleDetails(BaseModel):
     governance: GovernanceModuleDetails = GovernanceModuleDetails()
     financial_data_status: Optional[str] = None
     restatement_check: RestatementCheckDetails = RestatementCheckDetails()
+    as_filed: AsFiledModuleDetails = AsFiledModuleDetails()
 
 
 # ---------------------------------------------------------------------------

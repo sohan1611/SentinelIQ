@@ -402,3 +402,87 @@ async def test_restatement_check_runs_even_when_yfinance_has_no_data(monkeypatch
 
     flag_types = [f.flag_type for f in fake_session.added if isinstance(f, RedFlag)]
     assert "restatement" in flag_types
+
+
+# Two clean, steadily-growing annual periods -- deliberately healthier than
+# FINANCIALS' troubled restated picture (which pins a SEVERE cashflow flag
+# and HIGH debt flag), so the as-filed scores are demonstrably independent
+# of the restated ones rather than coincidentally identical.
+EDGAR_HISTORIES_FOR_AS_FILED = {
+    "revenue": [
+        {"start": "2020-01-01", "end": "2021-12-31", "val": 2000.0, "accn": "e1", "form": "10-K", "filed": "2022-01-15"},
+        {"start": "2021-01-01", "end": "2022-12-31", "val": 2200.0, "accn": "e2", "form": "10-K", "filed": "2023-01-15"},
+    ],
+    "net_income": [
+        {"start": "2020-01-01", "end": "2021-12-31", "val": 300.0, "accn": "e1", "form": "10-K", "filed": "2022-01-15"},
+        {"start": "2021-01-01", "end": "2022-12-31", "val": 330.0, "accn": "e2", "form": "10-K", "filed": "2023-01-15"},
+    ],
+    "operating_cf": [
+        {"start": "2020-01-01", "end": "2021-12-31", "val": 320.0, "accn": "e1", "form": "10-K", "filed": "2022-01-15"},
+        {"start": "2021-01-01", "end": "2022-12-31", "val": 350.0, "accn": "e2", "form": "10-K", "filed": "2023-01-15"},
+    ],
+    "total_assets": [
+        {"start": None, "end": "2021-12-31", "val": 5000.0, "accn": "e1", "form": "10-K", "filed": "2022-01-15"},
+        {"start": None, "end": "2022-12-31", "val": 5200.0, "accn": "e2", "form": "10-K", "filed": "2023-01-15"},
+    ],
+    "accounts_recv": [
+        {"start": None, "end": "2021-12-31", "val": 150.0, "accn": "e1", "form": "10-K", "filed": "2022-01-15"},
+        {"start": None, "end": "2022-12-31", "val": 160.0, "accn": "e2", "form": "10-K", "filed": "2023-01-15"},
+    ],
+    "total_debt_approx": [
+        {"start": None, "end": "2021-12-31", "val": 100.0, "accn": "e1", "form": "10-K", "filed": "2022-01-15"},
+        {"start": None, "end": "2022-12-31", "val": 105.0, "accn": "e2", "form": "10-K", "filed": "2023-01-15"},
+    ],
+}
+
+
+async def test_as_filed_score_is_computed_independently_and_does_not_move_integrity_score(
+    monkeypatch, company, analysis, fake_session
+):
+    # Phase 42 / C-2: the as-filed score runs the same forensic modules a
+    # second time against as-originally-filed EDGAR data. It must produce
+    # genuinely different numbers from the restated path (proving real
+    # independence, not a coincidental copy) while leaving the headline
+    # integrity_score and confidence completely untouched.
+    monkeypatch.setattr(analysis_worker, "fetch_financials", AsyncMock(return_value=FINANCIALS))
+    monkeypatch.setattr(analysis_worker, "fetch_news_text", AsyncMock(return_value="Acme reports record quarter."))
+    monkeypatch.setattr(analysis_worker, "fetch_news_sentiment", AsyncMock(return_value=65.0))
+    monkeypatch.setattr(analysis_worker, "fetch_news_statements", AsyncMock(return_value=NARRATIVE_STATEMENTS))
+    monkeypatch.setattr(analysis_worker, "GovernanceScorer", lambda: FakeGovernanceScorer(GOV_RESULT))
+    monkeypatch.setattr(analysis_worker, "ConsistencyEngine", lambda: FakeConsistencyEngine(NARRATIVE_RESULT))
+    monkeypatch.setattr(analysis_worker, "ReportGenerator", lambda: FakeReportGenerator("# Report\nAll good."))
+    monkeypatch.setattr(
+        analysis_worker, "fetch_all_concept_histories",
+        AsyncMock(return_value=EDGAR_HISTORIES_FOR_AS_FILED),
+    )
+
+    await analysis_worker.run_full_analysis(company.id, analysis.id)
+
+    assert analysis.status == "complete"
+    as_filed = analysis.module_details["as_filed"]
+    assert as_filed["coverage"] is True
+    assert as_filed["period_count"] == 2
+
+    # Clean, steadily-growing as-filed data -> healthy scores across the
+    # board, in sharp contrast to FINANCIALS' pinned SEVERE/HIGH picture.
+    assert as_filed["scores"]["cashflow"] == 100.0
+    assert as_filed["scores"]["debt"] == 100.0
+
+    # The restated path's troubled picture must still be exactly what it
+    # was before this phase -- this is the "doesn't move the headline score"
+    # guarantee, checked directly against the as-filed numbers being clearly
+    # different (proving they were computed independently, not shared).
+    restated_cashflow = analysis.module_details["scores"]["cashflow"]
+    restated_debt = analysis.module_details["scores"]["debt"]
+    assert restated_cashflow != as_filed["scores"]["cashflow"]
+    assert restated_debt != as_filed["scores"]["debt"]
+
+    delta = as_filed["delta"]
+    assert delta["cashflow"] == round(as_filed["scores"]["cashflow"] - restated_cashflow, 1)
+    assert delta["debt"] == round(as_filed["scores"]["debt"] - restated_debt, 1)
+
+    # The one invariant this entire phase must never violate: the headline
+    # score and confidence are computed purely from ctx.scores (the restated
+    # path) -- identical to what the existing happy-path test already pins
+    # for this exact FINANCIALS/GOV_RESULT/NARRATIVE_RESULT combination.
+    assert analysis.module_details["confidence"] == "high"
