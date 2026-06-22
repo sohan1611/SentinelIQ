@@ -16,6 +16,12 @@ logger = logging.getLogger(__name__)
 # without spending a Gemini call. See CLAUDE.md Phase 9 amendment.
 MIN_NEWS_TEXT_LENGTH = 40
 
+# A grounded quote must be specific enough to actually support an event, not
+# just a generic phrase ("the company", "on Monday") that happens to appear
+# in any news blob. Below this length, a substring match is too weak to
+# treat as real grounding (Phase 39 / C-1 hardening).
+MIN_QUOTE_LENGTH = 25
+
 _VALID_SEVERITIES = {"moderate", "high", "severe"}
 _SEVERITY_DEDUCTIONS = {"moderate": 15, "high": 25, "severe": 35}
 
@@ -34,6 +40,8 @@ def _is_grounded(quote: Optional[str], source_text: str) -> bool:
     differences without accepting fabricated quotes (Phase 14).
     """
     if not quote or not quote.strip():
+        return False
+    if len(quote.strip()) < MIN_QUOTE_LENGTH:
         return False
     if quote in source_text:
         return True
@@ -130,7 +138,13 @@ class GovernanceScorer:
             flags.append({
                 "flag_type": "governance",
                 "severity": event.severity,
-                "description": event.description,
+                # The published claim IS the grounded text, not the model's free-form
+                # gloss of it -- only source_quote passed the grounding check above,
+                # so it's the only text safe to publish as the accusation about a
+                # named company (Phase 39 / C-1). event.description is kept as
+                # secondary, clearly-separated context, never the primary claim.
+                "description": event.source_quote,
+                "ai_summary": event.description,
                 "period": event.event_date_approx[:20] if event.event_date_approx else None,
                 "source_quote": event.source_quote,
             })
