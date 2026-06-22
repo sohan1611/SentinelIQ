@@ -83,3 +83,22 @@ export function ModuleScoreBadge({ score }: { score: number | null | undefined }
     </div>
   );
 }
+
+// Phase 42 / C-2: a second score computed from SEC EDGAR's as-originally-filed
+// figures, shown beside the existing restated-data badge. Deliberately neutral
+// (no risk color on the delta) -- the backend doesn't assert a "positive delta
+// = good/bad" interpretation, so the UI doesn't either.
+export function AsFiledScoreNote({ score, delta }: { score: number; delta: number | null | undefined }) {
+  const roundedDelta = delta != null ? Math.round(delta * 10) / 10 : null;
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="font-sans text-[11px] text-text-secondary">As-filed:</span>
+      <span className="font-mono text-[13px] font-medium text-text-primary">{formatScore(score)}</span>
+      {roundedDelta !== null && roundedDelta !== 0 && (
+        <span className="font-mono text-[11px] text-text-secondary">
+          ({roundedDelta > 0 ? "+" : ""}{roundedDelta.toFixed(1)})
+        </span>
+      )}
+    </div>
+  );
+}

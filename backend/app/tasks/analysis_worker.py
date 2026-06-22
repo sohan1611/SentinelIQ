@@ -22,6 +22,7 @@ from app.services.news_aggregator import fetch_news_sentiment, fetch_news_text, 
 from app.services.sec_edgar import fetch_all_concept_histories
 from app.core.forensics.forensics_runner import ForensicsRunner
 from app.core.forensics.restatement_detector import detect_restatements
+from app.core.forensics.as_filed_adapter import build_as_filed_periods
 from app.core.governance.governance_scorer import GovernanceScorer
 from app.core.narrative.consistency_engine import ConsistencyEngine
 from app.core.scoring.fraud_scorer import FraudScorer
@@ -60,6 +61,8 @@ class StageContext:
     financial_data_status: str = "ok"
     edgar_coverage: bool = False
     edgar_facts_checked: int = 0
+    as_filed_scores: dict = field(default_factory=dict)
+    as_filed_period_count: int = 0
 
 
 @dataclass
@@ -188,12 +191,33 @@ async def _stage_forensics(ctx: StageContext):
                 )
                 ctx.session.add(flag_rec)
                 ctx.all_flags.append(flag_rec)
+
+            # As-filed forensic score (Phase 42 / C-2) -- runs the existing,
+            # unchanged forensic modules a second time against the
+            # as-originally-filed EDGAR figures instead of yfinance's
+            # restated view. Transient FinancialData objects, never
+            # session.add()'d -- this is a parallel in-memory computation,
+            # not a second set of rows to persist (same pattern already
+            # used for `facts` above). Too few periods degrades via the
+            # forensic modules' own existing "zero valid pairs -> 50.0"
+            # fallback -- no separate guard needed here.
+            as_filed_periods = build_as_filed_periods(histories)
+            ctx.as_filed_period_count = len(as_filed_periods)
+            as_filed_financial_data = [FinancialData(**p) for p in as_filed_periods]
+            as_filed_res = ForensicsRunner().run_forensics(as_filed_financial_data)
+            ctx.as_filed_scores["financial"] = (as_filed_res["revenue"].score + as_filed_res["debt"].score) / 2
+            ctx.as_filed_scores["cashflow"] = as_filed_res["cashflow"].score
+            ctx.as_filed_scores["earnings"] = as_filed_res["earnings"].score
+            ctx.as_filed_scores["debt"] = as_filed_res["debt"].score
+
             await ctx.session.commit()
     except Exception as e:
         ctx.log.error(f"Restatement check failed: {e}", extra={"stage": "forensics"})
         await ctx.session.rollback()
         ctx.edgar_coverage = False
         ctx.edgar_facts_checked = 0
+        ctx.as_filed_period_count = 0
+        ctx.as_filed_scores = {}
 
 
 async def _stage_governance(ctx: StageContext):
@@ -273,6 +297,18 @@ async def _stage_score_persist(ctx: StageContext):
         period_count = len(ctx.financial_records)
         integrity_score, confidence = FraudScorer().compute_integrity_score(ctx.scores, period_count)
 
+        # As-filed delta (Phase 42 / C-2) -- only computed when both sides
+        # are real numbers; if the restated path failed (e.g. yfinance
+        # rate-limited), there's nothing meaningful to diff, so that key is
+        # omitted, never fabricated as 0. No sign-convention claim is made
+        # here (e.g. "positive = fraud") -- that interpretation belongs to
+        # the report/UI layer and the analyst, not the backend.
+        as_filed_delta = {
+            key: round(ctx.as_filed_scores[key] - ctx.scores[key], 1)
+            for key in ("financial", "cashflow", "earnings", "debt")
+            if key in ctx.as_filed_scores and ctx.scores.get(key) is not None
+        }
+
         ctx.analysis.integrity_score = integrity_score
         ctx.analysis.financial_score = ctx.scores.get("financial")
         ctx.analysis.cashflow_score = ctx.scores.get("cashflow")
@@ -303,6 +339,12 @@ async def _stage_score_persist(ctx: StageContext):
             "restatement_check": {
                 "coverage": ctx.edgar_coverage,
                 "facts_checked": ctx.edgar_facts_checked,
+            },
+            "as_filed": {
+                "coverage": ctx.edgar_coverage,
+                "period_count": ctx.as_filed_period_count,
+                "scores": ctx.as_filed_scores,
+                "delta": as_filed_delta,
             },
         }).model_dump()
         await ctx.session.commit()
