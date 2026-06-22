@@ -81,6 +81,13 @@ export interface RestatementCheckDetails {
   facts_checked: number;
 }
 
+export interface AsFiledModuleDetails {
+  coverage: boolean;
+  period_count: number;
+  scores: Partial<Record<"financial" | "cashflow" | "earnings" | "debt", number>>;
+  delta: Partial<Record<"financial" | "cashflow" | "earnings" | "debt", number>>;
+}
+
 export interface ModuleScores {
   financial?: number;
   cashflow?: number;
@@ -121,6 +128,7 @@ export interface ModuleDetails {
   };
   financial_data_status?: string | null;
   restatement_check?: RestatementCheckDetails;
+  as_filed?: AsFiledModuleDetails;
 }
 
 export interface CompareItem {

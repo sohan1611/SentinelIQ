@@ -44,16 +44,35 @@ def test_no_matching_candidate_returns_empty_list():
     assert result == []
 
 
-def test_skips_absent_candidates_and_returns_first_match():
+def test_skips_absent_candidates_and_returns_the_present_one():
     facts = make_companyfacts({
         "NetIncomeLoss": {"USD": APPLE_FY2007_NET_INCOME_RESTATEMENT},
     })
 
-    # "Revenues" isn't present at all -- must fall through to "NetIncomeLoss"
+    # "Revenues" isn't present at all -- must still surface "NetIncomeLoss"
     # rather than stopping (or erroring) on the first candidate.
     result = extract_concept_history(facts, ["Revenues", "NetIncomeLoss"])
 
     assert result == APPLE_FY2007_NET_INCOME_RESTATEMENT
+
+
+def test_merges_entries_across_every_candidate_with_data_not_just_the_first():
+    """Phase 42: a company's tag for the same figure can change era (real
+    MSFT data -- "Revenues" covers 2009-2010, "RevenueFromContractWith..."
+    covers 2021-2025). Both candidates' entries must come back merged, not
+    just whichever candidate happens to be checked first."""
+    old_era = [{"start": "2008-07-01", "end": "2009-06-30", "val": 100.0, "accn": "old1", "form": "10-K", "filed": "2009-08-01"}]
+    new_era = [{"start": "2024-07-01", "end": "2025-06-30", "val": 500.0, "accn": "new1", "form": "10-K", "filed": "2025-08-01"}]
+    facts = make_companyfacts({
+        "Revenues": {"USD": old_era},
+        "RevenueFromContractWithCustomerExcludingAssessedTax": {"USD": new_era},
+    })
+
+    result = extract_concept_history(facts, ["Revenues", "RevenueFromContractWithCustomerExcludingAssessedTax", "SalesRevenueNet"])
+
+    assert len(result) == 2
+    ends = {e["end"] for e in result}
+    assert ends == {"2009-06-30", "2025-06-30"}
 
 
 def test_concept_present_with_no_usd_units_falls_through_to_next_candidate():
