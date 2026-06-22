@@ -65,8 +65,8 @@ export function getFlagEvidence(flag: RedFlag, moduleDetails: ModuleDetails | nu
       const govFlag = moduleDetails.governance?.flags?.find(
         (f) => f.description === flag.description
       );
-      if (govFlag?.source_quote) {
-        rows.push({ label: "Source Quote", value: govFlag.source_quote });
+      if (govFlag?.ai_summary) {
+        rows.push({ label: "AI Characterization", value: govFlag.ai_summary });
       }
       break;
     }

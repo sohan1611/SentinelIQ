@@ -73,6 +73,7 @@ export interface GovernanceFlagDetail {
   description: string;
   period: string | null;
   source_quote: string | null;
+  ai_summary: string | null;
 }
 
 export interface RestatementCheckDetails {
