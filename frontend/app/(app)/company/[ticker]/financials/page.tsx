@@ -5,7 +5,7 @@ import { use } from "react";
 import { CashFlowChart } from "@/components/charts/CashFlowChart";
 import { DebtTrendChart } from "@/components/charts/DebtTrendChart";
 import { RevenueQualityChart } from "@/components/charts/RevenueQualityChart";
-import { ModuleScoreBadge } from "@/components/modules/ScoreCard";
+import { ModuleScoreBadge, AsFiledScoreNote } from "@/components/modules/ScoreCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useCompanyContext } from "@/contexts/CompanyContext";
 
@@ -62,27 +62,62 @@ export default function FinancialsPage({ params }: { params: Promise<{ ticker: s
   const debtMetrics = details?.debt?.debt_metrics ?? [];
   const debtScore = details?.scores?.debt;
   const restatementCheck = details?.restatement_check;
+  const asFiled = details?.as_filed;
+  // Only a genuine signal once >=2 as-filed periods exist -- a graceful
+  // 50.0 fallback from too little data isn't a meaningful point of
+  // comparison against the real restated score (Phase 42 / C-2).
+  const hasAsFiledSignal = !!asFiled && asFiled.coverage && asFiled.period_count >= 2;
 
   return (
     <div className="w-full flex flex-col gap-6 mt-6 pb-16">
       <RevenueQualityChart
         divergences={divergences}
         recvRatios={recvRatios}
-        actions={<ModuleScoreBadge score={analysis.financial_score} />}
+        actions={
+          <div className="flex items-center gap-4">
+            <ModuleScoreBadge score={analysis.financial_score} />
+            {hasAsFiledSignal && asFiled.scores.financial !== undefined && (
+              <AsFiledScoreNote score={asFiled.scores.financial} delta={asFiled.delta.financial} />
+            )}
+          </div>
+        }
       />
       <CashFlowChart
         accrualRatios={accrualRatios}
-        actions={<ModuleScoreBadge score={analysis.cashflow_score} />}
+        actions={
+          <div className="flex items-center gap-4">
+            <ModuleScoreBadge score={analysis.cashflow_score} />
+            {hasAsFiledSignal && asFiled.scores.cashflow !== undefined && (
+              <AsFiledScoreNote score={asFiled.scores.cashflow} delta={asFiled.delta.cashflow} />
+            )}
+          </div>
+        }
       />
       <DebtTrendChart
         debtMetrics={debtMetrics}
-        actions={<ModuleScoreBadge score={debtScore} />}
+        actions={
+          <div className="flex items-center gap-4">
+            <ModuleScoreBadge score={debtScore} />
+            {hasAsFiledSignal && asFiled.scores.debt !== undefined && (
+              <AsFiledScoreNote score={asFiled.scores.debt} delta={asFiled.delta.debt} />
+            )}
+          </div>
+        }
       />
       {restatementCheck && (
         <p className="font-sans text-[11px] text-text-muted">
           {restatementCheck.coverage
             ? `Restatement check: SEC EDGAR filing history reviewed (${restatementCheck.facts_checked} data points). Any discrepancy between an original and later-amended filing appears in the red flags above.`
             : "Restatement check: not available — no SEC EDGAR filing history found for this company (common for foreign private issuers, or companies not registered with the SEC)."}
+        </p>
+      )}
+      {asFiled && (
+        <p className="font-sans text-[11px] text-text-muted">
+          {hasAsFiledSignal
+            ? `As-filed comparison: the scores above also reflect ${asFiled.period_count} as-originally-filed SEC annual reports, independent of the restated figures yfinance currently shows.`
+            : asFiled.coverage
+            ? "As-filed comparison: SEC EDGAR coverage exists, but fewer than 2 annual filings were available to compute a comparable score."
+            : "As-filed comparison: not available — no SEC EDGAR filing history found for this company."}
         </p>
       )}
     </div>
