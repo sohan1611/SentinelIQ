@@ -20,8 +20,11 @@ For each event found, return JSON:
   "severity": "moderate"|"high"|"severe", "description": str,
   "source_quote": "exact phrase copied verbatim from the text above that supports this event" }}
 
-source_quote must be a verbatim substring of the provided headlines above.
-If you cannot find an exact supporting phrase in the text, do not include this event.
+source_quote is what will be shown to the reader as the evidence for this
+event -- it must be a verbatim substring of the provided headlines above,
+specific enough on its own to support the event (not a generic phrase like
+"the company" or "on Monday"), and at least one full clause long.
+If you cannot find an exact, specific supporting phrase in the text, do not include this event.
 
 Return only a valid JSON array. No preamble, no explanation.
 If no events found, return an empty array: []
