@@ -2,7 +2,7 @@ import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import or_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import AsyncSessionLocal
@@ -14,34 +14,45 @@ STUCK_ANALYSIS_THRESHOLD_MINUTES = 10
 REAPER_INTERVAL_SECONDS = 120
 
 
-def _stuck_analyses_query(cutoff: datetime):
-    """AnalysisResult rows stuck in a running:* state past the threshold (ADR-012)."""
-    return select(AnalysisResult).where(
-        AnalysisResult.status.like("running:%"),
-        AnalysisResult.run_at < cutoff,
+def _stuck_analyses_update(cutoff: datetime):
+    """Atomic, conditional UPDATE for AnalysisResult rows stuck past the
+    threshold (ADR-012) -- either mid-run (running:*) or never picked up by
+    the worker at all (pending, Phase 40 / H-1: a BackgroundTask lost to a
+    restart in the window between the row's commit and the worker's first
+    status update). The WHERE clause is re-evaluated against each row's
+    CURRENT state at write time, so a worker that completes the analysis
+    between the reaper's scan and its write can never be clobbered back to
+    'error' (Phase 40 / A-2) -- the row simply no longer matches by the time
+    this UPDATE runs against it.
+    """
+    return (
+        update(AnalysisResult)
+        .where(
+            or_(
+                AnalysisResult.status.like("running:%"),
+                AnalysisResult.status == "pending",
+            ),
+            AnalysisResult.run_at < cutoff,
+        )
+        .values(status="error")
     )
 
 
 async def reap_stuck_analyses(session: AsyncSession) -> int:
-    """Mark stale running:* AnalysisResult rows with the terminal 'error' status.
+    """Mark stale running:*/pending AnalysisResult rows with the terminal
+    'error' status.
 
     A Render free-tier spin-down/restart can kill the in-process background
-    task mid-analysis, leaving the row frozen at running:<stage> forever and
-    the frontend polling indefinitely. "error" is a new terminal status --
-    it does not revive the retired "failed" status (ADR-010 / Phase 3).
+    task mid-analysis (leaving the row frozen at running:<stage>) or before
+    it ever starts (leaving the row frozen at pending) -- both freeze the
+    frontend polling indefinitely. "error" is a new terminal status -- it
+    does not revive the retired "failed" status (ADR-010 / Phase 3).
     Returns the number of rows updated.
     """
     cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=STUCK_ANALYSIS_THRESHOLD_MINUTES)
-    result = await session.execute(_stuck_analyses_query(cutoff))
-    stuck = result.scalars().all()
-
-    for analysis in stuck:
-        analysis.status = "error"
-
-    if stuck:
-        await session.commit()
-
-    return len(stuck)
+    result = await session.execute(_stuck_analyses_update(cutoff))
+    await session.commit()
+    return result.rowcount
 
 
 async def reaper_loop():
