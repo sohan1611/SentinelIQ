@@ -88,3 +88,61 @@ async def test_xff_header_takes_precedence_over_client_host():
 
     req2 = _FakeRequest("127.0.0.1", xff="203.0.113.99")
     await fn(req2)  # different real IP in XFF — must not raise
+
+
+async def test_leftmost_xff_entry_is_not_trusted_rightmost_is():
+    # H-2: an attacker can put anything they want at the LEFT of their own
+    # X-Forwarded-For request header. Only entries appended by our own
+    # trusted infrastructure (the rightmost ones) are reliable.
+    fn = rate_limit("rl_spoof", limit=1, window_secs=60)
+
+    attacker_attempt_1 = _FakeRequest("127.0.0.1", xff="1.1.1.1, 5.6.7.8")
+    await fn(attacker_attempt_1)  # exhausts the bucket for real IP 5.6.7.8
+
+    attacker_attempt_2 = _FakeRequest("127.0.0.1", xff="2.2.2.2, 5.6.7.8")
+    # Different forged leftmost value, SAME real (rightmost) IP -- must
+    # still be rate limited. Leftmost-trust would have bucketed these as
+    # two distinct IPs (1.1.1.1 vs 2.2.2.2), defeating the limit entirely.
+    with pytest.raises(HTTPException):
+        await fn(attacker_attempt_2)
+
+    different_real_user = _FakeRequest("127.0.0.1", xff="1.1.1.1, 9.9.9.9")
+    # Same forged leftmost value as attempt_1, genuinely different
+    # rightmost IP -- must NOT be rate limited (independent real user).
+    await fn(different_real_user)
+
+
+async def test_bucket_dict_evicts_least_recently_touched_when_over_cap(monkeypatch):
+    # S-2: without a cap, one entry per distinct (ip, key) accumulates
+    # forever. Bounded LRU eviction mirrors cache.py's pattern (Phase 41).
+    import app.api.middleware.rate_limit as rl_module
+    monkeypatch.setattr(rl_module, "_MAX_TRACKED_BUCKETS", 2)
+    rl_module._windows.clear()
+
+    fn = rate_limit("rl_evict", limit=100, window_secs=60)
+    await fn(_FakeRequest("10.1.1.1"))
+    await fn(_FakeRequest("10.1.1.2"))
+    await fn(_FakeRequest("10.1.1.3"))  # 3rd bucket pushes total over the cap of 2
+
+    keys = list(rl_module._windows.keys())
+    assert ("10.1.1.1", "rl_evict") not in keys  # oldest-touched, evicted
+    assert ("10.1.1.2", "rl_evict") in keys
+    assert ("10.1.1.3", "rl_evict") in keys
+
+
+async def test_touching_an_existing_bucket_protects_it_from_eviction(monkeypatch):
+    import app.api.middleware.rate_limit as rl_module
+    monkeypatch.setattr(rl_module, "_MAX_TRACKED_BUCKETS", 2)
+    rl_module._windows.clear()
+
+    fn = rate_limit("rl_lru", limit=100, window_secs=60)
+    await fn(_FakeRequest("10.2.2.1"))
+    await fn(_FakeRequest("10.2.2.2"))
+    await fn(_FakeRequest("10.2.2.1"))  # re-touch -- now most-recently-used
+    await fn(_FakeRequest("10.2.2.3"))  # pushes total over cap of 2
+
+    keys = list(rl_module._windows.keys())
+    # 10.2.2.2 is the least-recently-touched at this point, not 10.2.2.1.
+    assert ("10.2.2.2", "rl_lru") not in keys
+    assert ("10.2.2.1", "rl_lru") in keys
+    assert ("10.2.2.3", "rl_lru") in keys

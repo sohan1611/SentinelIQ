@@ -49,6 +49,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# S-2: baseline security headers on every response. CSP is maximally strict
+# ("default-src 'none'") since this is a pure JSON API backend -- it never
+# serves HTML/JS/CSS for a browser to apply CSP to in normal operation;
+# this is a safety net for the unexpected case (e.g. an error page slipping
+# out), not a constraint on any real feature here.
+_SECURITY_HEADERS = {
+    "Strict-Transport-Security": "max-age=63072000; includeSubDomains",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Content-Security-Policy": "default-src 'none'",
+}
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    for header, value in _SECURITY_HEADERS.items():
+        response.headers[header] = value
+    return response
+
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
     if isinstance(exc.detail, dict) and "error" in exc.detail:
