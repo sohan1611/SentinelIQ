@@ -11,9 +11,10 @@ completing an analysis between the reaper's scan and its write could be clobbere
 back to "error".
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
-from app.tasks.reaper import _stuck_analyses_update, reap_stuck_analyses
+import app.tasks.reaper as reaper_module
+from app.tasks.reaper import _stuck_analyses_update, get_reaper_status, reap_stuck_analyses
 
 
 class FakeUpdateResult:
@@ -62,3 +63,41 @@ async def test_reap_stuck_analyses_is_noop_when_nothing_stuck():
 
     assert count == 0
     assert session.committed is True
+
+
+def test_reaper_status_is_stale_before_any_run(monkeypatch):
+    monkeypatch.setattr(reaper_module, "_last_run_at", None)
+
+    status = get_reaper_status()
+
+    assert status["stale"] is True
+    assert status["last_run_at"] is None
+
+
+def test_reaper_status_is_fresh_immediately_after_a_run(monkeypatch):
+    monkeypatch.setattr(reaper_module, "_last_run_at", datetime.now(timezone.utc))
+    monkeypatch.setattr(reaper_module, "_last_reaped_count", 3)
+
+    status = get_reaper_status()
+
+    assert status["stale"] is False
+    assert status["last_reaped_count"] == 3
+    assert status["last_run_at"] is not None
+
+
+def test_reaper_status_is_stale_after_the_grace_window(monkeypatch):
+    too_long_ago = datetime.now(timezone.utc) - timedelta(seconds=reaper_module._STALE_AFTER_SECONDS + 1)
+    monkeypatch.setattr(reaper_module, "_last_run_at", too_long_ago)
+
+    status = get_reaper_status()
+
+    assert status["stale"] is True
+
+
+def test_reaper_status_is_fresh_just_inside_the_grace_window(monkeypatch):
+    just_in_time = datetime.now(timezone.utc) - timedelta(seconds=reaper_module._STALE_AFTER_SECONDS - 5)
+    monkeypatch.setattr(reaper_module, "_last_run_at", just_in_time)
+
+    status = get_reaper_status()
+
+    assert status["stale"] is False
