@@ -1,4 +1,9 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# CLAUDE.md / .env.example document this minimum (SECRET_KEY=your_secret_key_minimum_32_chars)
+# but nothing previously enforced it (S-1) -- a short key makes every HS256 JWT forgeable.
+MIN_SECRET_KEY_LENGTH = 32
 
 class Settings(BaseSettings):
     DATABASE_URL: str
@@ -14,5 +19,15 @@ class Settings(BaseSettings):
     SEC_EDGAR_USER_AGENT: str = "SentinelIQ research contact@sentineliq.io"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
+    @field_validator("SECRET_KEY")
+    @classmethod
+    def secret_key_must_be_strong(cls, v: str) -> str:
+        if len(v) < MIN_SECRET_KEY_LENGTH:
+            raise ValueError(
+                f"SECRET_KEY must be at least {MIN_SECRET_KEY_LENGTH} characters "
+                f"(got {len(v)}) -- a short key makes every JWT forgeable."
+            )
+        return v
 
 settings = Settings()
