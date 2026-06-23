@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
@@ -11,6 +12,7 @@ from jose import jwt, JWTError
 from app.api.deps import get_db, get_current_user
 from app.api.middleware.rate_limit import rate_limit, client_ip
 from app.config import settings
+from app.models.organization import Organization
 from app.models.user import User
 from app.schemas.user import UserCreate, UserResponse
 from app.services.audit_log import log_action
@@ -61,11 +63,20 @@ async def register(user_in: UserCreate, request: Request, response: Response, db
             status_code=400,
             detail="Registration unavailable for this email address.",
         )
+    # E-1 scaffolding: every user gets exactly one personal org, whose id
+    # matches their own user id (see the 0008 migration's backfill for why
+    # this 1:1 shape avoids needing a temporary id-correlation step).
+    new_id = uuid.uuid4()
+    org = Organization(id=new_id, name=f"{user_in.full_name or user_in.email}'s Organization")
     user = User(
+        id=new_id,
         email=user_in.email,
         hashed_pw=get_password_hash(user_in.password),
         full_name=user_in.full_name,
+        org_id=new_id,
+        role="owner",
     )
+    db.add(org)
     db.add(user)
     await db.commit()
     await db.refresh(user)

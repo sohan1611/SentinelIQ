@@ -15,6 +15,8 @@ class UserResponse(UserBase):
     tier: str
     created_at: datetime
     is_active: bool
+    org_id: UUID
+    role: str
 
     class Config:
         from_attributes = True
