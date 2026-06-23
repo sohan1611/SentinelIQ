@@ -71,3 +71,40 @@ def test_correlation_logger_adapter_works_without_call_site_extra(caplog):
     record = caplog.records[0]
     assert record.correlation_id == "abc-123"
     assert record.ticker == "AAPL"
+
+
+def test_secret_value_in_message_is_redacted(monkeypatch):
+    from app.config import settings
+    monkeypatch.setattr(settings, "GEMINI_API_KEY", "fake-gemini-key-xyz123")
+    monkeypatch.setattr(settings, "SECRET_KEY", "fake-secret-key-abc789")
+
+    record = _make_record(msg="Gemini API error: bad request to ...?key=fake-gemini-key-xyz123")
+    rendered = JsonFormatter().format(record)
+
+    assert "fake-gemini-key-xyz123" not in rendered
+    assert "***REDACTED***" in rendered
+
+
+def test_secret_value_in_extra_field_is_redacted(monkeypatch):
+    from app.config import settings
+    monkeypatch.setattr(settings, "GEMINI_API_KEY", "fake-gemini-key-xyz123")
+    monkeypatch.setattr(settings, "SECRET_KEY", "fake-secret-key-abc789")
+
+    record = _make_record(msg="rate_limit client_ip resolved", raw_detail="token=fake-secret-key-abc789")
+    rendered = JsonFormatter().format(record)
+
+    assert "fake-secret-key-abc789" not in rendered
+    assert "***REDACTED***" in rendered
+
+
+def test_ordinary_message_with_no_secret_is_unchanged(monkeypatch):
+    from app.config import settings
+    monkeypatch.setattr(settings, "GEMINI_API_KEY", "fake-gemini-key-xyz123")
+    monkeypatch.setattr(settings, "SECRET_KEY", "fake-secret-key-abc789")
+
+    record = _make_record(msg="stage started", stage="forensics")
+    payload = json.loads(JsonFormatter().format(record))
+
+    assert payload["message"] == "stage started"
+    assert payload["stage"] == "forensics"
+    assert "REDACTED" not in json.dumps(payload)
