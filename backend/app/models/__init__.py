@@ -1,3 +1,4 @@
+from .organization import Organization
 from .user import User
 from .company import Company
 from .financial_data import FinancialData

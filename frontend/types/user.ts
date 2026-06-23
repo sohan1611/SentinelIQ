@@ -5,6 +5,8 @@ export interface User {
   tier: string;
   created_at: string;
   is_active: boolean;
+  org_id: string;
+  role: string;
 }
 
 export interface Token {
