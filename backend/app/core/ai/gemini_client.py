@@ -7,7 +7,10 @@ from typing import TypedDict
 
 from google import genai
 from google.genai import types
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from app.config import settings
+from app.database import AsyncSessionLocal
+from app.models.gemini_daily_budget import GeminiDailyBudget
 
 logger = logging.getLogger(__name__)
 
@@ -19,21 +22,33 @@ BASE_BACKOFF_SECONDS = 2.0
 GEMINI_CALL_TIMEOUT_SECONDS = 30.0
 GEMINI_DAILY_BUDGET = 200
 
-# Process-wide daily call counter — resets at UTC midnight.
-# Dict operations under the GIL are effectively atomic for a single-process app.
-_daily_state: dict = {"date": None, "count": 0}
 
+async def _budget_check_and_increment() -> bool:
+    """Return True if a call can proceed; False if today's daily budget is
+    exhausted.
 
-def _budget_check_and_increment() -> bool:
-    """Return True and increment counter if a call can proceed; False if daily budget is exhausted."""
+    Persisted as one DB row per UTC date (A-4) -- the old in-process dict
+    reset on every Render restart, defeating the cap it existed to enforce.
+    Atomic upsert-and-increment (no SELECT-then-update race window): the
+    row's stored count can climb past GEMINI_DAILY_BUDGET once exhausted
+    (it counts calls attempted, not calls allowed) -- harmless, since only
+    the <= vs > comparison below matters, and a new UTC date is a new row.
+    """
     today = datetime.now(timezone.utc).date()
-    if _daily_state["date"] != today:
-        _daily_state["date"] = today
-        _daily_state["count"] = 0
-    if _daily_state["count"] >= GEMINI_DAILY_BUDGET:
-        return False
-    _daily_state["count"] += 1
-    return True
+    async with AsyncSessionLocal() as session:
+        stmt = (
+            pg_insert(GeminiDailyBudget)
+            .values(date=today, count=1)
+            .on_conflict_do_update(
+                index_elements=[GeminiDailyBudget.date],
+                set_={"count": GeminiDailyBudget.count + 1},
+            )
+            .returning(GeminiDailyBudget.count)
+        )
+        result = await session.execute(stmt)
+        new_count = result.scalar_one()
+        await session.commit()
+        return new_count <= GEMINI_DAILY_BUDGET
 
 
 class GenerationResult(TypedDict):
@@ -108,7 +123,7 @@ async def _call_with_backoff(coro_fn):
 
 
 async def generate_content(prompt: str, temperature: float | None = None) -> str | None:
-    if not _budget_check_and_increment():
+    if not await _budget_check_and_increment():
         logger.warning(f"Gemini daily budget ({GEMINI_DAILY_BUDGET}) exhausted — skipping call")
         return None
     config = _build_config(temperature)
@@ -128,7 +143,7 @@ async def generate_content(prompt: str, temperature: float | None = None) -> str
 
 
 async def generate_content_with_provenance(prompt: str, temperature: float = 0.0) -> GenerationResult:
-    if not _budget_check_and_increment():
+    if not await _budget_check_and_increment():
         logger.warning(f"Gemini daily budget ({GEMINI_DAILY_BUDGET}) exhausted — returning neutral result")
         return {"text": None, "prompt": prompt, "model_id": DEFAULT_MODEL_ID, "raw_response": None}
     config = _build_config(temperature)

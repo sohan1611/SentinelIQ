@@ -9,6 +9,25 @@ _RESERVED_LOG_RECORD_ATTRS = frozenset({
 })
 
 
+def _redact(text: str) -> str:
+    """Strip configured secret values out of rendered log output (S-4).
+
+    Several call sites interpolate raw upstream exception text into log
+    messages (e.g. f"Gemini API error: {e}") -- if an SDK's exception ever
+    embeds a request URL with an API key as a query param, that key would
+    otherwise land verbatim in Render's retained log stream. Reads settings
+    fresh on every call (not cached at import time) -- configure_logging()
+    runs very early in main.py, so this avoids any import-order fragility;
+    the cost is negligible at this app's real log volume.
+    """
+    from app.config import settings
+
+    for secret in (settings.GEMINI_API_KEY, settings.SECRET_KEY):
+        if secret:
+            text = text.replace(secret, "***REDACTED***")
+    return text
+
+
 class JsonFormatter(logging.Formatter):
     """Renders each LogRecord as a single-line JSON object.
 
@@ -32,7 +51,7 @@ class JsonFormatter(logging.Formatter):
         if record.exc_info:
             payload["exc_info"] = self.formatException(record.exc_info)
 
-        return json.dumps(payload, default=str)
+        return _redact(json.dumps(payload, default=str))
 
 
 class CorrelationLoggerAdapter(logging.LoggerAdapter):
