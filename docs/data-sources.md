@@ -33,9 +33,9 @@ cached 24 hours.
 **Yahoo Finance — and therefore yfinance — serves the *current, restated* view of a
 company's financial history, not the figures as originally filed for each period.** When
 a company later restates a prior period (revises previously reported revenue, income,
-debt, etc.), Yahoo's historical series updates retroactively. SentinelIQ has no access to
-point-in-time, as-filed figures (e.g., the original 10-K/10-Q as filed with the SEC on its
-original date).
+debt, etc.), Yahoo's historical series updates retroactively. The **headline**
+`integrity_score` is computed from this restated view. (Where SEC EDGAR coverage exists,
+a separate as-filed score is also computed — see Section 2 below.)
 
 **Why this matters for fraud forensics specifically:** a restatement is *itself* one of
 the strongest fraud signals that exists — it is, by definition, an admission that
@@ -47,15 +47,48 @@ corrected, the divergence/accrual patterns that would have flagged the original 
 no longer be visible — the restatement can erase the very evidence these modules look
 for.
 
-**Read the forensic score as:** *"Does this company's financial history, as Yahoo Finance
-reports it today, show signs of aggressive accounting?"* — **not** *"Did this company's
-originally-filed financials show signs of fraud?"* These are different questions, and
-SentinelIQ can currently only answer the first. Closing this gap would require a
-point-in-time SEC EDGAR pipeline (Horizon 2 — see `FUTURE_ARCHITECTURE.md`).
+**Read the headline forensic score as:** *"Does this company's financial history, as
+Yahoo Finance reports it today, show signs of aggressive accounting?"* — **not** *"Did
+this company's originally-filed financials show signs of fraud?"* The headline
+`integrity_score` answers only the first question. Section 2 below describes the
+separate as-filed signal that, where SEC EDGAR coverage exists, answers a version of the
+second.
 
 ---
 
-## 2. News data — Google News RSS (+ supplementary feeds)
+## 2. As-filed verification — SEC EDGAR (Phase 36/42, free, keyless)
+
+**Source:** `data.sec.gov`'s public XBRL company-facts API (`backend/app/services/
+sec_edgar.py`) — no API key, no cost, ~10 req/sec fair-access guidance. For companies
+with U.S. SEC XBRL coverage, this returns the *entire* historical filing record: every
+value ever reported for every concept, across every filing and every amendment, each
+tagged with its accession number and filed date.
+
+This serves two distinct purposes, both **additive** to the yfinance-based scoring
+above, not a replacement for it:
+
+1. **Restatement detection** (`restatement_detector.py`, Phase 35/36) — compares every
+   period's filed values across amendments; a changed value for an already-filed period
+   surfaces as a `RedFlag` (`flag_type="restatement"`). Flag-only — does not affect any
+   score.
+2. **As-filed forensic score** (`as_filed_adapter.py`, Phase 42 / ADR-005-adjacent
+   "C-2") — runs the *same* forensic modules a second time against the figures as they
+   stood on each filing's *original* date (the earliest-filed value per period, not the
+   restated one), producing a parallel score set persisted at
+   `module_details.as_filed.{scores, delta, coverage, period_count}`. **This never moves
+   the headline `integrity_score`** — it is a second, independently-computed signal
+   shown alongside the first, and the delta between the two is itself informative (a
+   large divergence between as-filed and restated figures is a tell worth reading).
+
+**Coverage is not universal.** Foreign private issuers filing Form 20-F, and any company
+without SEC XBRL data, have no EDGAR coverage at all (`fetch_all_concept_histories`
+returns `None`) — `module_details.restatement_check.coverage` and
+`module_details.as_filed.coverage` are both `False` in that case, and the analysis falls
+back to the yfinance-only path with no as-filed signal.
+
+---
+
+## 3. News data — Google News RSS (+ supplementary feeds)
 
 **Source:** [`feedparser`](https://github.com/kurtmckee/feedparser) over public RSS feeds
 (`backend/app/services/news_aggregator.py`). No paid news API is used.
@@ -95,7 +128,7 @@ A real earnings-call/SEC transcript pipeline (Horizon 2 — see `FUTURE_ARCHITEC
 
 ---
 
-## 3. AI analysis — Google Gemini 2.5 Flash
+## 4. AI analysis — Google Gemini 2.5 Flash
 
 **Source:** Google Gemini 2.5 Flash (free tier, 1,500 requests/day), via
 `backend/app/core/ai/gemini_client.py`.
@@ -123,24 +156,25 @@ their neutral fallback with no API call and the analysis continues normally.
 
 ---
 
-## 4. What SentinelIQ does NOT use
+## 5. What SentinelIQ does NOT use
 
 To set expectations explicitly — the following are **not** part of the current pipeline,
 despite stub files existing in the codebase for future use:
 
-- **SEC EDGAR / as-filed regulatory data** (Horizon 2)
 - **Earnings call or investor-day transcripts** (Horizon 2)
-- **Any paid or point-in-time financial data provider**
+- **Any paid or real-time financial data provider**
 - **Insider trading / Form 4 data**
 - **Social media or analyst-estimate data**
+- **Alternative data** (satellite imagery, credit card data, web traffic)
 
 ---
 
-## Summary
+## 6. Summary
 
 | Data | Source | Point-in-time? | Used for |
 |---|---|---|---|
-| Financial statements | yfinance (Yahoo Finance) | **No — restated/current view** | Revenue, cash flow, earnings, debt forensics |
+| Financial statements | yfinance (Yahoo Finance) | **No — restated/current view** | Revenue, cash flow, earnings, debt forensics (headline score) |
+| As-filed verification | SEC EDGAR XBRL (`data.sec.gov`) | **Yes — where covered** | Restatement flags + parallel as-filed score (not blended into headline score) |
 | News headlines | Google News / Yahoo Finance / Reuters RSS | Yes (publish date) | News sentiment, governance events, narrative consistency |
 | AI extraction/scoring | Google Gemini 2.5 Flash, `temperature=0` | N/A | Governance events, narrative contradictions |
 
