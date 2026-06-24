@@ -39,3 +39,28 @@ jobs:
 
       - name: Run tests
         run: pytest
+
+  # Phase 52 / U-5: separate from the "test" job above on purpose -- branch
+  # protection requires "test" by name, and this job must never become a
+  # second name that check depends on. No `paths:` filter, same rationale
+  # as "test": a path filter would permanently block backend-only PRs from
+  # ever getting a passing check on this job.
+  frontend-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
