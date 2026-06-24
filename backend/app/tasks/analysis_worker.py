@@ -45,12 +45,16 @@ async def update_status(session: AsyncSession, analysis_id: UUID, stage: str):
 
 @dataclass
 class StageContext:
-    session: AsyncSession
-    company: Company
-    analysis: AnalysisResult
     analysis_id: UUID
     company_id: UUID
     log: logging.LoggerAdapter
+    # Phase 48 (A-1): reassigned fresh each stage iteration in run_full_analysis's
+    # loop, not fixed once for the whole run -- so a stage's rollback can never
+    # leave the NEXT stage reading an expired object. None only transiently,
+    # before the loop's first iteration sets them.
+    session: AsyncSession | None = None
+    company: Company | None = None
+    analysis: AnalysisResult | None = None
     scores: dict = field(default_factory=dict)
     forensics_details: dict = field(default_factory=dict)
     financial_records: list = field(default_factory=list)
@@ -374,59 +378,69 @@ async def _stage_report(ctx: StageContext):
     await ctx.session.commit()
 
 
-async def _generate_watchlist_alerts(ctx: StageContext):
+async def _generate_watchlist_alerts(analysis_id: UUID, company_id: UUID, log: logging.LoggerAdapter):
     """Phase 47 (E-4): every completed analysis that crosses a risk band
     (per FraudScorer.classify_risk) alerts every user watching this company
-    -- runs on ANY completion, user- or (Step 2's scheduler) system-triggered.
+    -- runs on ANY completion, user- or (the scheduler's) system-triggered.
     Not a STAGES entry: this is a side effect of completion, not a step in
     computing the score, so it must not appear as a pipeline "stage" in
-    GET /analysis/{id}/status. Own try/except -- alerting must never
-    threaten a pipeline that just finished successfully.
+    GET /analysis/{id}/status.
+
+    Phase 48 (A-1): takes plain ids, not a StageContext, and opens its own
+    fresh session -- never reuses the stage loop's session, so a prior
+    stage's rollback (which expires every object in that session's
+    identity map) can never leave the AnalysisResult this reads in a
+    stale/expired state. Own try/except -- alerting must never threaten a
+    pipeline that just finished successfully.
     """
     try:
-        prev_res = await ctx.session.execute(
-            select(AnalysisResult)
-            .where(
-                AnalysisResult.company_id == ctx.company_id,
-                AnalysisResult.status == "complete",
-                AnalysisResult.id != ctx.analysis_id,
+        async with AsyncSessionLocal() as session:
+            analysis = await session.get(AnalysisResult, analysis_id)
+            if analysis is None or analysis.integrity_score is None:
+                return
+
+            prev_res = await session.execute(
+                select(AnalysisResult)
+                .where(
+                    AnalysisResult.company_id == company_id,
+                    AnalysisResult.status == "complete",
+                    AnalysisResult.id != analysis_id,
+                )
+                .order_by(AnalysisResult.run_at.desc())
+                .limit(1)
             )
-            .order_by(AnalysisResult.run_at.desc())
-            .limit(1)
-        )
-        previous = prev_res.scalars().first()
-        # No prior analysis (first-ever for this company), or either score
-        # missing -> nothing real to compare against. Not an error.
-        if previous is None or previous.integrity_score is None or ctx.analysis.integrity_score is None:
-            return
+            previous = prev_res.scalars().first()
+            # No prior analysis (first-ever for this company), or either
+            # score missing -> nothing real to compare against. Not an error.
+            if previous is None or previous.integrity_score is None:
+                return
 
-        scorer = FraudScorer()
-        previous_risk = scorer.classify_risk(previous.integrity_score)
-        new_risk = scorer.classify_risk(ctx.analysis.integrity_score)
-        if previous_risk == new_risk:
-            return  # same band -- not alert-worthy by this step's definition
+            scorer = FraudScorer()
+            previous_risk = scorer.classify_risk(previous.integrity_score)
+            new_risk = scorer.classify_risk(analysis.integrity_score)
+            if previous_risk == new_risk:
+                return  # same band -- not alert-worthy by this step's definition
 
-        watchers_res = await ctx.session.execute(
-            select(WatchlistItem.user_id).where(WatchlistItem.company_id == ctx.company_id)
-        )
-        user_ids = watchers_res.scalars().all()
-        if not user_ids:
-            return
+            watchers_res = await session.execute(
+                select(WatchlistItem.user_id).where(WatchlistItem.company_id == company_id)
+            )
+            user_ids = watchers_res.scalars().all()
+            if not user_ids:
+                return
 
-        for user_id in user_ids:
-            ctx.session.add(WatchlistAlert(
-                user_id=user_id,
-                company_id=ctx.company_id,
-                analysis_id=ctx.analysis_id,
-                previous_score=previous.integrity_score,
-                new_score=ctx.analysis.integrity_score,
-                previous_risk=previous_risk,
-                new_risk=new_risk,
-            ))
-        await ctx.session.commit()
+            for user_id in user_ids:
+                session.add(WatchlistAlert(
+                    user_id=user_id,
+                    company_id=company_id,
+                    analysis_id=analysis_id,
+                    previous_score=previous.integrity_score,
+                    new_score=analysis.integrity_score,
+                    previous_risk=previous_risk,
+                    new_risk=new_risk,
+                ))
+            await session.commit()
     except Exception as e:
-        ctx.log.error(f"Watchlist alert generation failed: {e}", extra={"stage": "watchlist_alerts"})
-        await ctx.session.rollback()
+        log.error(f"Watchlist alert generation failed: {e}", extra={"stage": "watchlist_alerts"})
 
 
 STAGES: list[Stage] = [
@@ -453,29 +467,41 @@ async def run_full_analysis(company_id: UUID, analysis_id: UUID):
 
         log = CorrelationLoggerAdapter(logger, {"correlation_id": str(analysis_id), "ticker": company.ticker})
 
-        ctx = StageContext(
-            session=session,
-            company=company,
-            analysis=analysis,
-            analysis_id=analysis_id,
-            company_id=company_id,
-            log=log,
-        )
+    # ctx accumulates plain-data fields (scores, financial_records, etc.)
+    # across the whole run; session/company/analysis are intentionally left
+    # unset here and reassigned fresh every stage iteration below.
+    ctx = StageContext(analysis_id=analysis_id, company_id=company_id, log=log)
 
-        for stage in STAGES:
-            await update_status(session, analysis_id, stage.status_text)
+    # Phase 48 (A-1): each stage gets its OWN fresh session and its OWN fresh
+    # company/analysis fetch. A stage's rollback expires every object in
+    # THAT stage's session only -- it can never leave the NEXT stage reading
+    # an expired object, since the next stage never touches this session.
+    for stage in STAGES:
+        async with AsyncSessionLocal() as stage_session:
+            ctx.session = stage_session
+            ctx.company = await stage_session.get(Company, company_id)
+            ctx.analysis = await stage_session.get(AnalysisResult, analysis_id)
+            await update_status(stage_session, analysis_id, stage.status_text)
             log.info("stage started", extra={"stage": stage.name})
             try:
                 await stage.fn(ctx)
             except Exception as e:
                 log.error(f"Unhandled exception in stage '{stage.name}': {e}", extra={"stage": stage.name})
-                try:
-                    await session.rollback()
-                except Exception:
-                    pass
+                # No manual rollback -- exiting this `async with` on exception
+                # already closes (and thus rolls back) this stage's session.
 
-        analysis.status = "complete"
-        company.last_analyzed = datetime.now(timezone.utc).replace(tzinfo=None)
+    # Phase 48 (A-1): fresh session for the final write -- never reuses the
+    # stage loop's session above, so a prior stage's rollback (which expires
+    # every object in that session's identity map, including `analysis`/
+    # `company`) can never leave this read holding stale state.
+    async with AsyncSessionLocal() as session:
+        analysis = await session.get(AnalysisResult, analysis_id)
+        company = await session.get(Company, company_id)
+        if analysis:
+            analysis.status = "complete"
+        if company:
+            company.last_analyzed = datetime.now(timezone.utc).replace(tzinfo=None)
         await session.commit()
-        await _generate_watchlist_alerts(ctx)
-        log.info("analysis complete")
+
+    await _generate_watchlist_alerts(analysis_id, company_id, log)
+    log.info("analysis complete")
