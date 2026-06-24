@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1.routes import auth, company, analysis, feedback, report, watchlist, audit_log
+from app.api.v1.routes import auth, company, analysis, feedback, report, watchlist, audit_log, alerts
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
@@ -9,3 +9,4 @@ api_router.include_router(feedback.router, prefix="/feedback", tags=["feedback"]
 api_router.include_router(report.router, prefix="/report", tags=["report"])
 api_router.include_router(watchlist.router, prefix="/watchlist", tags=["watchlist"])
 api_router.include_router(audit_log.router, prefix="/audit-log", tags=["audit-log"])
+api_router.include_router(alerts.router, prefix="/alerts", tags=["alerts"])
