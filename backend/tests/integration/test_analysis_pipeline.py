@@ -505,3 +505,76 @@ async def test_as_filed_score_is_computed_independently_and_does_not_move_integr
     # path) -- identical to what the existing happy-path test already pins
     # for this exact FINANCIALS/GOV_RESULT/NARRATIVE_RESULT combination.
     assert analysis.module_details["confidence"] == "high"
+
+
+async def test_stage_failure_does_not_leak_session_into_next_stage(monkeypatch, company, analysis):
+    """Phase 48 (A-1): every stage iteration gets its OWN fresh session and
+    its OWN fresh company/analysis fetch. This test overrides the file's
+    shared-fake-session autouse fixture with a session factory that returns
+    a NEW tracked instance every call, then forces a 2-stage run where stage
+    1 raises an exception that escapes its own handling entirely (no
+    internal try/except, unlike every real _stage_* function) -- proving
+    stage 2 still gets a distinct, valid session/company/analysis,
+    unaffected by stage 1's failure.
+    """
+    created_sessions = []
+
+    class TrackedFakeSession:
+        def __init__(self):
+            self.committed = False
+            created_sessions.append(self)
+
+        async def get(self, model, id_):
+            if model is analysis_worker.Company:
+                return company
+            if model is analysis_worker.AnalysisResult:
+                return analysis
+            return None
+
+        def add(self, obj):
+            pass
+
+        async def execute(self, stmt):
+            return FakeReadResult()
+
+        async def commit(self):
+            self.committed = True
+
+    class TrackedFakeSessionCtx:
+        async def __aenter__(self):
+            return TrackedFakeSession()
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False  # never suppress -- matches a real AsyncSession's __aexit__
+
+    monkeypatch.setattr(analysis_worker, "AsyncSessionLocal", lambda: TrackedFakeSessionCtx())
+    monkeypatch.setattr(analysis_worker, "_generate_watchlist_alerts", AsyncMock())
+
+    received_in_stage_2 = {}
+
+    async def failing_stage(ctx):
+        raise RuntimeError("boom -- escapes this stage's own handling entirely")
+
+    async def recording_stage(ctx):
+        received_in_stage_2["session"] = ctx.session
+        received_in_stage_2["company"] = ctx.company
+        received_in_stage_2["analysis"] = ctx.analysis
+
+    fake_stages = [
+        analysis_worker.Stage("boom", "Booming...", failing_stage),
+        analysis_worker.Stage("record", "Recording...", recording_stage),
+    ]
+    monkeypatch.setattr(analysis_worker, "STAGES", fake_stages)
+
+    await analysis_worker.run_full_analysis(company.id, analysis.id)
+
+    # 1 initial existence-check session + 2 stage sessions + 1 final-write
+    # session = 4 distinct instances; none reused across stages.
+    assert len(created_sessions) == 4
+    assert len(set(id(s) for s in created_sessions)) == 4
+
+    # Stage 2's session is one of the tracked instances (not None, not a
+    # leftover from stage 1) and it still resolved a valid company/analysis.
+    assert received_in_stage_2["session"] in created_sessions
+    assert received_in_stage_2["company"] is company
+    assert received_in_stage_2["analysis"] is analysis
