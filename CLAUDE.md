@@ -385,6 +385,41 @@ Amendments are explicit and dated — never silent behavioral changes inside a f
 > is — a single-owner, pre-revenue project — not as an enterprise SOC-2 document
 > claiming a posture it doesn't have.
 
+> **Phase 51 amendment (2026-06-24):** U-4, accessibility pass on the custom gauge/
+> bars/charts. Audited the actual current state first rather than trust the backlog's
+> "never audited" framing — `IntegrityGauge` already had solid ARIA (`role="meter"`,
+> `aria-valuetext`, respects `prefers-reduced-motion`) and needed no change. Three real
+> gaps found and fixed, all purely additive (no visible design change):
+>
+> 1. **`ChartFrame`** (the shared wrapper under all 5 Chart.js components —
+>    `CashFlowChart`, `DebtTrendChart`, `IntegrityScoreTrendChart`, `NarrativeTrendChart`,
+>    `RevenueQualityChart`) rendered a bare `<canvas>` with zero accessible alternative.
+>    New optional `accessibleTable` prop renders a visually-hidden (`sr-only`) `<table>`
+>    alongside the canvas — one column per dataset (`ChartFrameAccessibleSeries[]`,
+>    generalized for both 1-dataset and 2-dataset charts), reusing each chart's own
+>    existing tick-formatter function rather than introducing new formatting logic. The
+>    visual canvas wrapper gets `aria-hidden="true"` whenever a table is supplied.
+> 2. **`ModuleScoreCard`**'s risk tier was conveyed only via the card's left-border
+>    color, with no text equivalent anywhere (unlike `ModuleScoreBadge` in the same
+>    file, which already renders a `Badge` with the risk label). Fixed with a single
+>    `sr-only` span stating the risk label immediately before the score number — no
+>    visible change.
+> 3. **`RedFlagTimeline`** (custom HTML, not Chart.js) had real text content but no
+>    semantic list structure, and severity was conveyed only by dot/tick color with no
+>    text anywhere. The events container is now a `<ul role="list">` (the explicit
+>    `role` is defensive — some browser/AT combinations drop the implicit list
+>    semantics once `list-style: none` is applied via CSS); each event is an `<li>`
+>    carrying one `aria-label` summarizing severity + label + year as a single
+>    coherent announcement, with the inner decorative pieces marked `aria-hidden` to
+>    avoid double-announcing the same text — the same "labeled wrapper + hidden
+>    decorative children" pattern `IntegrityGauge` already used.
+>
+> No code changes beyond these three components; verification was `tsc`/`next build`
+> plus careful manual review of every edited file — all three live behind the app's
+> auth wall with no mock-data fixture available locally, so the actual rendered
+> accessibility tree could not be checked live in this environment (noted explicitly
+> rather than implied otherwise).
+
 ---
 
 ## Git Commit Identity — MANDATORY
