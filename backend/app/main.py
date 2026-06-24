@@ -13,6 +13,7 @@ from app.config import settings
 from app.database import engine
 from app.logging_config import configure_logging
 from app.tasks.reaper import reaper_loop
+from app.tasks.watchlist_refresher import watchlist_refresher_loop
 
 configure_logging()
 
@@ -31,9 +32,11 @@ _STATUS_ERROR_CODES = {
 async def lifespan(app: FastAPI):
     # Schema is managed via Alembic migrations (alembic upgrade head) -- see CLAUDE.md
     reaper_task = asyncio.create_task(reaper_loop())
+    refresher_task = asyncio.create_task(watchlist_refresher_loop())
     yield
     # Cleanup on shutdown
     reaper_task.cancel()
+    refresher_task.cancel()
     await engine.dispose()
 
 app = FastAPI(

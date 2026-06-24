@@ -26,15 +26,34 @@ from app.tasks import analysis_worker
 import pytest
 
 
+class FakeReadResult:
+    """Stand-in for a SQLAlchemy Result on a SELECT .execute() call. Every
+    fixture company in this file is "fresh" (no prior AnalysisResult, no
+    WatchlistItem rows), so .scalars().first()/.all() always come back empty
+    -- this correctly exercises _generate_watchlist_alerts' early-return
+    path (Phase 47 / E-4) instead of relying on an AttributeError being
+    silently caught by its try/except."""
+
+    def scalars(self):
+        return self
+
+    def first(self):
+        return None
+
+    def all(self):
+        return []
+
+
 class FakeSession:
     """In-memory stand-in for AsyncSession.
 
     .get() resolves against the rows passed at construction time;
     .add()/.commit()/.rollback() are recorded/no-ops. Mutations the pipeline
     makes to `company`/`analysis` (the same instances passed in) are visible
-    to the test via those original references. .execute() is a no-op stand-in
-    for the bulk EDGAR-fact insert (Phase 41 / H-4) -- its return value is
-    never read by the pipeline, only awaited.
+    to the test via those original references. .execute() records the
+    statement and returns an empty FakeReadResult -- used both as a no-op
+    stand-in for the bulk EDGAR-fact insert (Phase 41 / H-4, whose return
+    value is never read) and as an empty-result stand-in for any SELECT.
     """
 
     def __init__(self, *rows):
@@ -52,7 +71,7 @@ class FakeSession:
 
     async def execute(self, stmt):
         self.executed.append(stmt)
-        return None
+        return FakeReadResult()
 
     async def commit(self):
         pass
