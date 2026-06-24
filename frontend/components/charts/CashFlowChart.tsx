@@ -56,14 +56,23 @@ export function CashFlowChart({ accrualRatios, actions }: CashFlowChartProps) {
     ],
   }
 
+  const formatValue = (v: number) => formatPercent(v, 0)
   const options = baseChartOptions<"bar">(
-    (v) => formatPercent(v, 0),
+    formatValue,
     (ctx) => `Accrual ratio: ${formatPercent(ctx.parsed.y, 1)}`
   )
   options.plugins = { ...options.plugins, legend: { display: false } }
 
   return (
-    <ChartFrame title="Cash Flow Integrity" subtitle="Sloan accrual ratio by period — lower is better" actions={actions}>
+    <ChartFrame
+      title="Cash Flow Integrity"
+      subtitle="Sloan accrual ratio by period — lower is better"
+      actions={actions}
+      accessibleTable={{
+        labels: chartData.labels,
+        series: [{ label: chartData.datasets[0].label, values: chartData.datasets[0].data, formatValue }],
+      }}
+    >
       <Bar data={chartData} options={options} />
     </ChartFrame>
   )

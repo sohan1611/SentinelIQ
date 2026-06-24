@@ -67,8 +67,9 @@ export function DebtTrendChart({ debtMetrics, actions }: DebtTrendChartProps) {
     ],
   }
 
+  const formatValue = (v: number) => formatPercent(v, 0)
   const options = baseChartOptions<"line">(
-    (v) => formatPercent(v, 0),
+    formatValue,
     (ctx) => `${ctx.dataset.label}: ${formatPercent(ctx.parsed.y, 1)}`,
     { emphasizeZero: true }
   )
@@ -78,8 +79,12 @@ export function DebtTrendChart({ debtMetrics, actions }: DebtTrendChartProps) {
       title="Debt Stress"
       subtitle="Debt-to-revenue and year-over-year debt growth"
       actions={actions}
+      accessibleTable={{
+        labels: chartData.labels,
+        series: chartData.datasets.map((d) => ({ label: d.label, values: d.data, formatValue })),
+      }}
     >
-      <Line data={chartData} options={options} plugins={[createEndLabelPlugin((v) => formatPercent(v, 0))]} />
+      <Line data={chartData} options={options} plugins={[createEndLabelPlugin(formatValue)]} />
     </ChartFrame>
   )
 }
