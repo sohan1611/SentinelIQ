@@ -295,6 +295,53 @@ Amendments are explicit and dated — never silent behavioral changes inside a f
 > frontend every 5 minutes. **`docs/deployment.md`** records the canonical URL, the
 > Render service id, and the vanity-alias gotcha.
 
+> **Phase 47 amendment (2026-06-24):** E-4, watchlist monitoring/alerting — closes the
+> gap between "passive bookmark list" and the product's own "early warning" promise.
+> Four steps, all landed together.
+>
+> **Step 1 — alert detector.** New `WatchlistAlert` model/table (`backend/app/models/
+> watchlist_alert.py`, migration `0009`): `user_id`, `company_id`, `analysis_id`,
+> `previous_score`/`new_score`, `previous_risk`/`new_risk`, `is_read`, `created_at`.
+> `analysis_worker.py`'s `_generate_watchlist_alerts(ctx)` runs at the end of **every**
+> completed analysis (user- or system-triggered) — own try/except, never threatens a
+> pipeline that just finished. Trigger rule: **band-crossing only**, via
+> `FraudScorer.classify_risk()` on the previous-vs-new `integrity_score` — a same-band
+> point swing (e.g. 85→82, both "strong") does not alert. No prior completed analysis,
+> or either score `None`, is "nothing to compare" and is silently skipped, not an error.
+> One `WatchlistAlert` row is written per user watching the company (companies can have
+> multiple watchers).
+>
+> **Step 2 — scheduled refresher (the "monitoring" half).** Step 1 alone only fires
+> opportunistically, whenever *any* analysis happens to complete. `backend/app/tasks/
+> watchlist_refresher.py`'s `watchlist_refresher_loop()` (started in `main.py`'s
+> `lifespan`, same pattern as the reaper) is what makes this autonomous:
+> `find_due_companies()` selects companies that are on **at least one** user's watchlist
+> and are either never-analyzed or past `STALE_AFTER_HOURS` (24) old, capped at
+> `MAX_REFRESHES_PER_TICK` (3) per tick (`REFRESH_INTERVAL_SECONDS` = 3600) so a large
+> watchlist backlog drains gradually instead of bursting yfinance/Gemini all at once —
+> deliberately conservative given the live yfinance rate-limiting already observed
+> (Phase 43) and the shared `GEMINI_DAILY_BUDGET=200`/day ceiling this loop draws from
+> like any other caller. `trigger_refresh()` creates a `pending` `AnalysisResult` and
+> calls `run_full_analysis()` directly — **no `AnalysisRun` row is logged**; that table
+> meters user-initiated free-tier quota (ADR-007/013), and a scheduled tick has no
+> acting user.
+>
+> **Step 3 — API.** `GET /alerts` returns `{alerts, unread_count}` for the current user,
+> newest first, capped at `ALERTS_LIMIT` (50); `unread_count` is a **separate**,
+> unscoped-by-limit query — a nav badge must reflect every unread alert, not just the
+> page returned by the capped list. `POST /alerts/{id}/read` 404s if the alert is
+> missing **or owned by a different user** (the real security boundary — ownership, not
+> just existence).
+>
+> **Step 4 — frontend.** New `/alerts` page (`frontend/app/(app)/alerts/page.tsx`),
+> `useAlerts` hook, Sidebar nav entry rendered as `Alerts (N)` when `N > 0` (plain text
+> in parens, same convention as the watchlist page's `Compare Selected (N)` — no icons,
+> design rule #4/#9). Clicking through to the company page marks the alert read as a
+> side effect. **Not added to `BottomTabBar.tsx`** (mobile bottom nav) — its 4 slots
+> (Home/Search/Watchlist/Settings) were a deliberate, already-settled mobile layout
+> decision; mobile users can still reach `/alerts` via the URL, just not from the tab
+> bar. A 5th-slot decision wasn't in this phase's scope and is left for the owner.
+
 ---
 
 ## Git Commit Identity — MANDATORY
@@ -809,6 +856,9 @@ GET    /report/company/{ticker}    markdown report content
 GET    /watchlist                  user's list with latest scores
 POST   /watchlist                  add company (409 if duplicate)
 DELETE /watchlist/{ticker}         remove company
+
+GET    /alerts                     user's risk-band-change alerts + unread_count
+POST   /alerts/{id}/read           mark one alert read (404 if not owned)
 ```
 
 ---
@@ -860,10 +910,14 @@ Always check cache before any yfinance or Gemini call.
 
 ---
 
-## Database Models (8 total)
+## Database Models (14 total)
+
+Original 8, plus 6 added across later phases (list corrected here as of Phase 47 —
+it had drifted out of date across Phases 5/38/41/45/46 without this header being fixed):
 
 ```
-User              id, email, hashed_pw, full_name, tier, created_at, is_active
+User              id, email, hashed_pw, full_name, tier, created_at, is_active,
+                  org_id, role  [Phase 46]
 Company           id, name, ticker, sector, exchange, last_analyzed
 FinancialData     id, company_id, period, period_type, revenue, net_income,
                   operating_cf, free_cf, total_debt, total_assets,
@@ -877,6 +931,16 @@ Report            id, company_id, analysis_id, content (Text), generated_at
 WatchlistItem     id, user_id, company_id, added_at [unique: user_id+company_id]
 NarrativeSnapshot id, company_id, period, statement_text, sentiment_label,
                   sentiment_score, source, fetched_at
+AnalysisRun       id, user_id, company_id, analysis_result_id, run_at, counted
+                  [Phase 5 / ADR-007, counted column Phase 10 / ADR-013]
+EdgarFinancialFact id, company_id, concept, period_start, period_end, value,
+                  accession_number, form_type, filed_date  [Phase 41 / H-4]
+AuditLog          id, user_id, action, detail (JSON), ip_address, created_at
+                  [Phase 38 / F6]
+GeminiDailyBudget date (PK), count  [Phase 45 / A-4]
+Organization      id, name, created_at  [Phase 46 / E-1]
+WatchlistAlert    id, user_id, company_id, analysis_id, previous_score, new_score,
+                  previous_risk, new_risk, is_read, created_at  [Phase 47 / E-4]
 ```
 
 ---

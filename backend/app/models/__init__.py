@@ -11,3 +11,4 @@ from .analysis_run import AnalysisRun
 from .edgar_fact import EdgarFinancialFact
 from .audit_log import AuditLog
 from .gemini_daily_budget import GeminiDailyBudget
+from .watchlist_alert import WatchlistAlert
