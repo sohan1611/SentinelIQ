@@ -420,6 +420,42 @@ Amendments are explicit and dated — never silent behavioral changes inside a f
 > accessibility tree could not be checked live in this environment (noted explicitly
 > rather than implied otherwise).
 
+> **Phase 52 amendment (2026-06-25):** U-5 Step 1, frontend test infrastructure —
+> previously zero test files, zero test tooling, confirmed by inspection before
+> building anything. Chose **Vitest + React Testing Library + jsdom** over Jest: no
+> existing investment in either, and Vitest is faster (esbuild-based) with better
+> Next.js 15/ESM support for a clean setup. `frontend/vitest.config.ts` mirrors
+> `tsconfig.json`'s `@/*` path alias exactly; `frontend/vitest.setup.ts` wires up
+> `@testing-library/jest-dom` matchers. New `npm test` (`vitest run`, used in CI) and
+> `npm run test:watch` scripts.
+>
+> First real suite (not a placeholder): `frontend/lib/utils/formatDate.test.ts`,
+> chosen because `formatDate`/`formatRelativeTime` have a **documented bug history**
+> (Phase 28's naive-UTC-timestamp misparse fix) — testing it locks the fix against
+> silent regression. The regression test pins `process.env.TZ` to a fixed, non-DST,
+> clearly-offset zone (`"Etc/GMT+5"`) directly in the test file (the only way to
+> control timezone identically on Windows-local dev and Linux CI) — pinning to plain
+> UTC would make the original bug invisible, since the offset would be zero.
+> `formatRelativeTime`'s tests use `vi.setSystemTime()` to pin "now," avoiding
+> real-clock flakiness on minute/hour/day boundary assertions. 17/17 passing.
+>
+> `.github/workflows/ci.yml` gained a new `frontend-test` job, deliberately separate
+> from the existing `test` job — branch protection requires `test` by name, and that
+> job must never gain a second name it could start depending on. No `paths:` filter,
+> same rationale the existing job already documents for itself.
+>
+> **Disclosed, not silently absorbed:** `npm install` surfaced `npm audit` findings
+> (3 moderate, 1 high, 1 critical) — traced to a single root cause, `esbuild`'s known
+> dev-server-only advisory (GHSA-67mh-4wv8-2f99: a local website can read responses
+> from a running dev server), propagating through Vite into Vitest's dependency tree.
+> The only fix path is a major `vitest` v2→v4 bump (`isSemVerMajor: true`) with no
+> tests yet validated against the new major version — deliberately not forced into the
+> very first commit that introduces testing at all. Real-world exposure here is
+> low: this is a dev-only dependency never shipped in `next build`'s output, and the
+> exploitable surface (`vitest`'s interactive watch mode) is never used in CI (which
+> always runs the one-shot `vitest run`). Revisit the v4 upgrade as its own deliberate
+> step once there's more suite coverage to validate against it.
+
 ---
 
 ## Git Commit Identity — MANDATORY
