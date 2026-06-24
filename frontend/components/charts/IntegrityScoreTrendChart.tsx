@@ -63,15 +63,24 @@ export function IntegrityScoreTrendChart({ history, isLoading, actions }: Integr
     ],
   }
 
+  const formatValue = (v: number) => formatScore(v)
   const options = baseChartOptions<"line">(
-    (v) => formatScore(v),
+    formatValue,
     (ctx) => `Integrity Score: ${formatScore(ctx.parsed.y)}`
   )
   options.scales!.y!.min = 0
   options.scales!.y!.max = 100
 
   return (
-    <ChartFrame title={TITLE} subtitle={SUBTITLE} actions={actions}>
+    <ChartFrame
+      title={TITLE}
+      subtitle={SUBTITLE}
+      actions={actions}
+      accessibleTable={{
+        labels: chartData.labels,
+        series: [{ label: chartData.datasets[0].label, values: chartData.datasets[0].data, formatValue }],
+      }}
+    >
       <Line data={chartData} options={options} plugins={[createEndLabelPlugin(formatScore)]} />
     </ChartFrame>
   )

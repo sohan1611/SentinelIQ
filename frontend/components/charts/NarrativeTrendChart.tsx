@@ -58,8 +58,9 @@ export function NarrativeTrendChart({ snapshots, actions }: NarrativeTrendChartP
     ],
   }
 
+  const formatValue = (v: number) => formatPercent(v, 0)
   const options = baseChartOptions<"line">(
-    (v) => formatPercent(v, 0),
+    formatValue,
     (ctx) => `Sentiment: ${formatPercent(ctx.parsed.y, 0)}`,
     { emphasizeZero: true }
   )
@@ -69,8 +70,12 @@ export function NarrativeTrendChart({ snapshots, actions }: NarrativeTrendChartP
       title="News Sentiment Over Time"
       subtitle="Sentiment score derived from recent news headlines, per period"
       actions={actions}
+      accessibleTable={{
+        labels: chartData.labels,
+        series: [{ label: chartData.datasets[0].label, values: chartData.datasets[0].data, formatValue }],
+      }}
     >
-      <Line data={chartData} options={options} plugins={[createEndLabelPlugin((v) => formatPercent(v, 0))]} />
+      <Line data={chartData} options={options} plugins={[createEndLabelPlugin(formatValue)]} />
     </ChartFrame>
   )
 }

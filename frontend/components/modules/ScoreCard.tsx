@@ -47,6 +47,7 @@ export function ModuleScoreCard({ label, score, summary, href = "#", loading }: 
           {label}
         </div>
         <div className="flex items-baseline mb-2">
+          {hasScore && <span className="sr-only">{getRiskLabel(score)}. </span>}
           <span className={`font-mono text-[32px] md:text-[40px] font-bold leading-none ${colors.text}`}>
             {formatScore(score)}
           </span>

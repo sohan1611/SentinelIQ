@@ -1,5 +1,16 @@
 import * as React from "react"
 
+export interface ChartFrameAccessibleSeries {
+  label: string;
+  values: (number | null)[];
+  formatValue: (value: number) => string;
+}
+
+export interface ChartFrameAccessibleTable {
+  labels: string[];
+  series: ChartFrameAccessibleSeries[];
+}
+
 export interface ChartFrameProps {
   title: string;
   subtitle?: string;
@@ -7,9 +18,10 @@ export interface ChartFrameProps {
   children: React.ReactNode;
   height?: number | string;
   className?: string;
+  accessibleTable?: ChartFrameAccessibleTable;
 }
 
-export function ChartFrame({ title, subtitle, actions, children, height = 280, className = "" }: ChartFrameProps) {
+export function ChartFrame({ title, subtitle, actions, children, height = 280, className = "", accessibleTable }: ChartFrameProps) {
   return (
     <div className={`bg-surface border border-border rounded-card p-5 flex flex-col ${className}`}>
       <div className="flex items-start justify-between mb-4 gap-4">
@@ -21,9 +33,35 @@ export function ChartFrame({ title, subtitle, actions, children, height = 280, c
         </div>
         {actions && <div className="shrink-0">{actions}</div>}
       </div>
-      <div style={{ height }} className="relative w-full">
+      <div style={{ height }} className="relative w-full" aria-hidden={accessibleTable ? true : undefined}>
         {children}
       </div>
+      {accessibleTable && (
+        <table className="sr-only">
+          <caption>{title}{subtitle ? ` — ${subtitle}` : ""}</caption>
+          <thead>
+            <tr>
+              <th scope="col">Period</th>
+              {accessibleTable.series.map((s) => (
+                <th scope="col" key={s.label}>{s.label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {accessibleTable.labels.map((label, i) => (
+              <tr key={label}>
+                <th scope="row">{label}</th>
+                {accessibleTable.series.map((s) => {
+                  const value = s.values[i]
+                  return (
+                    <td key={s.label}>{value == null ? "No data" : s.formatValue(value)}</td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   )
 }
