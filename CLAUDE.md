@@ -371,6 +371,20 @@ Amendments are explicit and dated — never silent behavioral changes inside a f
 > a stage's own handling) and confirms stage 2 still receives a distinct, valid
 > session/company/analysis.
 
+> **Phase 50 amendment (2026-06-24):** E-5, data retention & incident response policy
+> (documentation only, no code). **`docs/data-retention-incident-response.md`** is new —
+> a table-by-table retention statement (confirmed by inspection: the only `DELETE` in the
+> entire backend is the user-initiated watchlist-removal endpoint; every other table
+> grows indefinitely), the actual manual process behind the Privacy Policy's existing
+> "30 days" account-deletion promise (no self-service tool exists; scoped to
+> user-identifying tables only, never the company-scoped `analysis_results`/`red_flags`/
+> `reports`/`financial_data`), an incident-response table for the six realistic failure
+> modes this system is actually built to handle, and a plainly-stated vendor
+> concentration section (yfinance is still primary, not replaced, by the EDGAR as-filed
+> hedge; Gemini has no failover provider at all). Written for what this project actually
+> is — a single-owner, pre-revenue project — not as an enterprise SOC-2 document
+> claiming a posture it doesn't have.
+
 ---
 
 ## Git Commit Identity — MANDATORY
