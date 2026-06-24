@@ -51,7 +51,9 @@ export default function DataSourcesPage() {
                 Yahoo Finance serves the <em>current, restated</em> view of a company&apos;s
                 financial history — not the figures as originally filed with the SEC.
                 When a company restates a prior period, Yahoo&apos;s historical series updates
-                retroactively. SentinelIQ has no access to point-in-time, as-filed figures.
+                retroactively. The headline Integrity Score is computed from this restated
+                view. (Where SEC EDGAR coverage exists, a separate as-filed score is also
+                computed — see the next section.)
               </p>
             </div>
 
@@ -72,7 +74,39 @@ export default function DataSourcesPage() {
           {/* 2 */}
           <section>
             <div className="font-sans text-[10px] uppercase tracking-[0.08em] text-text-secondary mb-3">
-              2. NEWS DATA — RSS FEEDS (GOOGLE NEWS, YAHOO FINANCE, REUTERS)
+              2. AS-FILED VERIFICATION — SEC EDGAR (FREE, KEYLESS)
+            </div>
+            <p className="text-text-secondary mb-4">
+              For companies with U.S. SEC XBRL coverage, SentinelIQ also pulls each
+              company&apos;s full historical filing record directly from SEC EDGAR&apos;s public,
+              keyless API — no vendor, no cost. This serves two purposes: detecting
+              restatements (a company quietly revising a previously reported figure —
+              itself a meaningful fraud signal, surfaced as a flag) and computing a
+              separate <em>as-filed</em> forensic score, built from the figures as they
+              stood on each filing&apos;s original date, not the restated view above.
+            </p>
+
+            <div className="bg-[#FDF2DC] border border-[#C47A14] rounded-[6px] px-4 py-3">
+              <p className="font-sans text-[13px] font-medium text-[#C47A14] mb-1">
+                A parallel signal, not a replacement
+              </p>
+              <p className="font-sans text-[13px] text-text-secondary">
+                The as-filed score is computed and shown alongside the headline Integrity
+                Score — it does not change it. Coverage is also not universal: foreign
+                private issuers filing Form 20-F, and any company without SEC XBRL data,
+                have no EDGAR coverage and fall back to the yfinance-only path above. Where
+                coverage exists, the divergence between the as-filed and restated scores is
+                itself a signal worth reading.
+              </p>
+            </div>
+          </section>
+
+          <div className="w-full h-[1px] bg-border" />
+
+          {/* 3 */}
+          <section>
+            <div className="font-sans text-[10px] uppercase tracking-[0.08em] text-text-secondary mb-3">
+              3. NEWS DATA — RSS FEEDS (GOOGLE NEWS, YAHOO FINANCE, REUTERS)
             </div>
             <p className="text-text-secondary mb-4">
               News data is fetched from public RSS feeds using the open-source feedparser
@@ -120,10 +154,10 @@ export default function DataSourcesPage() {
 
           <div className="w-full h-[1px] bg-border" />
 
-          {/* 3 */}
+          {/* 4 */}
           <section>
             <div className="font-sans text-[10px] uppercase tracking-[0.08em] text-text-secondary mb-3">
-              3. AI ANALYSIS — GOOGLE GEMINI 2.5 FLASH
+              4. AI ANALYSIS — GOOGLE GEMINI 2.5 FLASH
             </div>
             <p className="text-text-secondary mb-4">
               Two modules — Governance Risk and Narrative Consistency — use Google Gemini
@@ -147,17 +181,16 @@ export default function DataSourcesPage() {
 
           <div className="w-full h-[1px] bg-border" />
 
-          {/* 4 */}
+          {/* 5 */}
           <section>
             <div className="font-sans text-[10px] uppercase tracking-[0.08em] text-text-secondary mb-3">
-              4. WHAT SENTINELIQ DOES NOT USE
+              5. WHAT SENTINELIQ DOES NOT USE
             </div>
             <p className="text-text-secondary mb-4">
               To set expectations explicitly, the following are not part of the current pipeline:
             </p>
             <ul className="flex flex-col gap-2 text-text-secondary">
               {[
-                "SEC EDGAR / as-filed point-in-time regulatory filings",
                 "Earnings call or investor-day transcripts",
                 "Any paid or real-time financial data provider",
                 "Insider trading / Form 4 data",
@@ -174,10 +207,10 @@ export default function DataSourcesPage() {
 
           <div className="w-full h-[1px] bg-border" />
 
-          {/* 5 — summary table */}
+          {/* 6 — summary table */}
           <section>
             <div className="font-sans text-[10px] uppercase tracking-[0.08em] text-text-secondary mb-3">
-              5. SUMMARY
+              6. SUMMARY
             </div>
             <div className="border border-border rounded-[6px] overflow-hidden">
               <table className="w-full font-sans text-[13px]">
@@ -191,6 +224,7 @@ export default function DataSourcesPage() {
                 <tbody>
                   {[
                     ["Financial statements", "yfinance (Yahoo Finance)", "No — restated"],
+                    ["As-filed verification", "SEC EDGAR XBRL (data.sec.gov)", "Yes — where covered"],
                     ["News headlines", "Google News / Yahoo Finance / Reuters RSS", "Yes (publish date)"],
                     ["AI extraction", "Google Gemini 2.5 Flash", "N/A"],
                   ].map(([data, source, pit], i) => (
