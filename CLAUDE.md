@@ -342,6 +342,35 @@ Amendments are explicit and dated — never silent behavioral changes inside a f
 > decision; mobile users can still reach `/alerts` via the URL, just not from the tab
 > bar. A 5th-slot decision wasn't in this phase's scope and is left for the owner.
 
+> **Phase 48 amendment (2026-06-24):** A-1, stop sharing one long-lived DB session
+> across the whole pipeline. `run_full_analysis`'s 7-stage loop, plus Phase 47's new
+> post-loop alert step, had all been threading a single `AsyncSession` through every
+> stage, each calling `commit()`/`rollback()` on it — and `rollback()` expires every
+> object in that session's identity map, including the shared `company`/`analysis` ORM
+> objects. A later stage reading either after an earlier stage's rollback would hit an
+> expired attribute, which `AsyncSession` (unlike sync `Session`) cannot silently
+> lazy-reload — a latent hazard, not reproduced live (no local Postgres connection to
+> observe it against), but traced precisely through the code and SQLAlchemy's documented
+> rollback semantics.
+>
+> **Fix:** `run_full_analysis`'s loop now opens a fresh `AsyncSessionLocal()` per stage
+> iteration, re-fetching `company`/`analysis` fresh each time, before calling
+> `stage.fn(ctx)` — `StageContext.session`/`company`/`analysis` are reassigned every
+> iteration rather than fixed once for the whole run (the dataclass fields are now
+> `Optional`, default `None`, for the brief window before the loop's first iteration
+> sets them). **None of the 7 `_stage_*` function bodies changed** — the hazard lived in
+> the orchestrator sharing one session, not in any stage's own logic, so the fix is
+> entirely in the loop. The final status/`last_analyzed` write and
+> `_generate_watchlist_alerts` (now taking plain `analysis_id`/`company_id` instead of a
+> `StageContext`) each get their own fresh session too, for the same reason.
+>
+> Verified via the existing integration suite (output-unchanged across all prior
+> scenarios) plus one new test purpose-built for this property:
+> `test_stage_failure_does_not_leak_session_into_next_stage` runs a 2-stage list where
+> stage 1 raises unconditionally (no internal try/except, simulating a bug that escapes
+> a stage's own handling) and confirms stage 2 still receives a distinct, valid
+> session/company/analysis.
+
 ---
 
 ## Git Commit Identity — MANDATORY
