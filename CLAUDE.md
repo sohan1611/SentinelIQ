@@ -455,6 +455,14 @@ Amendments are explicit and dated — never silent behavioral changes inside a f
 > exploitable surface (`vitest`'s interactive watch mode) is never used in CI (which
 > always runs the one-shot `vitest run`). Revisit the v4 upgrade as its own deliberate
 > step once there's more suite coverage to validate against it.
+>
+> **Follow-up (2026-06-25):** Dependabot opened the exact fix as two duplicate PRs
+> (`@vitejs/plugin-react` 4→6, `vitest` 2→4). Tested directly rather than merged
+> blind: checked out the PR branch, ran the full suite (17/17 still passing — same
+> count, same assertions), `tsc --noEmit`, `next build`, and `next lint`, all clean;
+> `npm audit` dropped to 0 vulnerabilities. Merged the verified one, closed the
+> duplicate with an explanation rather than leaving a stale, never-actionable PR
+> open.
 
 > **Phase 53 amendment (2026-06-25):** E-2 free scaffolding — real token revocation.
 > `POST /auth/logout` previously only cleared the cookie client-side; it decoded the
