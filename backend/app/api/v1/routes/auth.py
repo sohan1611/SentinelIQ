@@ -4,6 +4,8 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy import delete
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 import bcrypt
@@ -13,6 +15,7 @@ from app.api.deps import get_db, get_current_user
 from app.api.middleware.rate_limit import rate_limit, client_ip
 from app.config import settings
 from app.models.organization import Organization
+from app.models.revoked_token import RevokedToken
 from app.models.user import User
 from app.schemas.user import UserCreate, UserResponse
 from app.services.audit_log import log_action
@@ -30,7 +33,7 @@ def get_password_hash(password: str) -> str:
 
 def create_access_token(subject: str | Any, expires_delta: timedelta) -> str:
     expire = datetime.now(timezone.utc) + expires_delta
-    to_encode = {"exp": expire, "sub": str(subject)}
+    to_encode = {"exp": expire, "sub": str(subject), "jti": str(uuid.uuid4())}
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm="HS256")
 
 
@@ -115,17 +118,40 @@ async def logout(
     db: AsyncSession = Depends(get_db),
     sentineliq_token: Optional[str] = Cookie(None),
 ):
-    # Best-effort: log who logged out if the token is still decodable, but
-    # never let a missing/expired/invalid token block clearing the cookie --
-    # logout must stay idempotent regardless of session state (unlike
-    # get_current_user, which intentionally raises 401 for every other route).
+    # Best-effort: revoke + log who logged out if the token is still
+    # decodable, but never let a missing/expired/invalid token block
+    # clearing the cookie -- logout must stay idempotent regardless of
+    # session state (unlike get_current_user, which intentionally raises
+    # 401 for every other route).
     if sentineliq_token:
         try:
             payload = jwt.decode(sentineliq_token, settings.SECRET_KEY, algorithms=["HS256"])
             user_id = payload.get("sub")
+            jti = payload.get("jti")
+            exp = payload.get("exp")
+            if jti and exp:
+                # Revoke this specific token server-side (Phase 53 / E-2) --
+                # without this, logout only cleared the cookie client-side
+                # and a copied/leaked token kept working for its full
+                # lifetime. ON CONFLICT DO NOTHING keeps a repeated logout
+                # call with the same token idempotent (jti is the PK).
+                stmt = pg_insert(RevokedToken).values(
+                    jti=jti,
+                    expires_at=datetime.fromtimestamp(exp, tz=timezone.utc).replace(tzinfo=None),
+                ).on_conflict_do_nothing(index_elements=[RevokedToken.jti])
+                await db.execute(stmt)
+                # Opportunistic pruning -- a blocklist row is only needed
+                # until its own exp passes (jose already rejects expired
+                # tokens by then), so this keeps the table bounded without
+                # a dedicated background loop.
+                await db.execute(
+                    delete(RevokedToken).where(
+                        RevokedToken.expires_at < datetime.now(timezone.utc).replace(tzinfo=None)
+                    )
+                )
             if user_id:
                 log_action(db, user_id, "logout", ip_address=client_ip(request))
-                await db.commit()
+            await db.commit()
         except JWTError:
             pass
 

@@ -456,6 +456,32 @@ Amendments are explicit and dated — never silent behavioral changes inside a f
 > always runs the one-shot `vitest run`). Revisit the v4 upgrade as its own deliberate
 > step once there's more suite coverage to validate against it.
 
+> **Phase 53 amendment (2026-06-25):** E-2 free scaffolding — real token revocation.
+> `POST /auth/logout` previously only cleared the cookie client-side; it decoded the
+> JWT solely for audit logging and never invalidated it server-side, so a
+> copied/leaked token kept working for its full remaining lifetime even after the
+> legitimate user "logged out." `create_access_token` now embeds a `jti` claim
+> (`backend/app/api/v1/routes/auth.py`); `logout` inserts it into a new
+> `revoked_tokens` table (`backend/app/models/revoked_token.py`, migration `0010`)
+> via `INSERT ... ON CONFLICT DO NOTHING` (jti is the primary key, so a repeated
+> logout call with the same token stays idempotent — the existing contract
+> `logout` already had); `get_current_user` (`backend/app/api/deps.py`) now checks
+> the blocklist before trusting an otherwise-valid signature/exp, raising the same
+> 401 used for every other auth failure.
+>
+> **Bounded without a new background loop.** `expires_at` mirrors the revoked
+> token's own `exp` — once that passes, `jose.jwt.decode` already rejects the
+> token regardless of the blocklist, so a row only needs to outlive the token's
+> natural lifetime. `logout` opportunistically deletes any already-expired
+> blocklist rows in the same transaction as every new revocation, rather than
+> adding a third always-on asyncio loop alongside the reaper and watchlist
+> refresher.
+>
+> **Scope explicitly excludes refresh tokens** — that's a separate, larger change
+> (new endpoint, new cookie strategy, frontend silent-refresh logic) than closing
+> the "logout doesn't actually revoke" gap. Not scheduled; revisit only if the
+> 60-minute access-token lifetime itself becomes a problem.
+
 ---
 
 ## Git Commit Identity — MANDATORY
