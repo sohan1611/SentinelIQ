@@ -7,6 +7,7 @@ from sqlalchemy.future import select
 
 from app.database import get_db
 from app.config import settings
+from app.models.revoked_token import RevokedToken
 from app.models.user import User
 from app.schemas.user import TokenData
 
@@ -41,6 +42,15 @@ async def get_current_user(
         token_data = TokenData(email=user_id)
     except JWTError:
         raise credentials_exception
+
+    # Phase 53 (E-2 free scaffolding): a token revoked via /auth/logout is
+    # rejected here even though its signature/exp are otherwise still valid
+    # -- this is the actual kill switch a leaked token previously had none of.
+    jti = payload.get("jti")
+    if jti:
+        revoked = await db.get(RevokedToken, jti)
+        if revoked is not None:
+            raise credentials_exception
 
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalars().first()
