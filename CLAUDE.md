@@ -513,6 +513,29 @@ to be attributed as a contributor on GitHub. A backup branch
 (`backup-before-coauthor-cleanup-20260614`) preserves the pre-cleanup history. This rule
 exists to prevent recurrence.)*
 
+**Mandatory pre-merge check for any PR not opened by the owner (Dependabot, or any other
+bot/non-owner contributor):** before running `gh pr merge --squash`, re-author that PR's
+branch to the owner's identity first — `git commit --amend --author="sohan1611
+<sohanmandal1611@gmail.com>"` (or `git rebase`/interactive amend for multi-commit
+branches), then force-push that **feature/bot branch** (never `main` — bot branches
+carry no protection rule, so this needs no settings change and no admin bypass). Only
+*then* squash-merge. GitHub's squash-merge preserves the original commits' author when a
+PR has a single author — it does NOT default to whoever clicks merge — so an
+un-re-authored Dependabot PR lands on `main` already attributed to `dependabot[bot]`,
+which then shows up in the repo's Contributors graph. Re-authoring before merge avoids
+ever needing to touch `main`'s branch protection or force-push to `main` at all.
+
+*(Background: on 2026-06-30, exactly this happened — PR #30, a Dependabot dependency
+bump, was squash-merged without re-authoring first, landing `dependabot[bot]` on `main`
+as a contributor. Fixed via `git filter-repo` rewriting just that one commit's
+author/committer fields (content-verified byte-identical via diff against a backup
+branch), then a one-time owner-performed force-push to `main` after the owner — not
+Claude — temporarily loosened `main`'s "allow force pushes" and "do not allow bypassing
+the above settings" protections, immediately re-locking both afterward. Verified clean
+via the actual GitHub Contributors API (`gh api repos/{owner}/{repo}/contributors`), not
+the cached UI widget. This rule's pre-merge step exists so this never has to be
+repeated.)*
+
 ---
 
 ## What is SentinelIQ
