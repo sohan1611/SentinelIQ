@@ -490,6 +490,44 @@ Amendments are explicit and dated — never silent behavioral changes inside a f
 > the "logout doesn't actually revoke" gap. Not scheduled; revisit only if the
 > 60-minute access-token lifetime itself becomes a problem.
 
+> **Phase 54 amendment (2026-06-30):** S-3 — gate analysis-output read endpoints
+> behind auth. An architecture-review pass found that every endpoint revealing
+> analysis value was fully public while only `POST /analysis/run` (the
+> compute-triggering, quota-metered endpoint) was gated — anyone could read a full
+> fraud-analysis report for free; only generating a *new* one cost anything. A
+> related issue: `GET /company/{ticker}` performed an unauthenticated database
+> write (creates a `Company` row via a live `yfinance` call on cache miss) — a real
+> cost vector given the project's hard $7-8/month budget ceiling. The owner was
+> asked directly (require login / keep public / public-but-rate-limited) and chose
+> **require login**.
+>
+> Seven routes now require `current_user: User = Depends(get_current_user)`,
+> replicating the exact pattern `POST /analysis/run` already used — no new auth
+> logic, purely wiring the existing dependency onto more routes:
+> `GET /analysis/compare`, `GET /analysis/{id}/status`,
+> `GET /analysis/company/{ticker}`, `GET /analysis/company/{ticker}/history`,
+> `GET /report/company/{ticker}`, `GET /company/{ticker}`, `GET /company/search`.
+> `GET /health` stays deliberately public (Render's spin-down probe); no
+> CSV/export endpoints exist anywhere in the backend, so this is the complete
+> scope. See "API Routes Reference" below for the per-route table.
+>
+> **No frontend changes** — `frontend/lib/api/client.ts`'s shared `apiRequest()`
+> already sets `credentials: "include"` on every fetch, so the `sentineliq_token`
+> httpOnly cookie was already sent on every one of these calls before this phase;
+> gating the backend only closes the gap where someone bypasses the frontend
+> entirely and hits the routes directly with no credentials. Background tasks
+> (`watchlist_refresher.py`, `analysis_worker.py`, `reaper.py`) are unaffected —
+> none make HTTP calls to these routes, all operate on `AsyncSession`/ORM directly.
+>
+> New `backend/tests/integration/test_protected_routes_require_auth.py` exercises
+> the real ASGI app via `TestClient` (parametrized over all 7 routes, asserting
+> 401), since the existing per-route unit tests only prove the Python function
+> works when called directly, not that the dependency is wired onto the live
+> route. Confirmed via this test that a 401 from `get_current_user` is still
+> wrapped by the global error envelope (Phase 5c) — `{"error": {"code":
+> "UNAUTHORIZED", "message": "Could not validate credentials"}}` — not a bare
+> `detail` string, regardless of which route triggers it.
+
 ---
 
 ## Git Commit Identity — MANDATORY
@@ -1014,15 +1052,16 @@ POST   /auth/register              create user, return JWT
 POST   /auth/login                 OAuth2 form, return JWT
 GET    /auth/me                    current user profile
 
-GET    /company/search?q=          ILIKE search, max 10 results
-GET    /company/{ticker}           company metadata, creates if new
+GET    /company/search?q=          ILIKE search, max 10 results — auth required
+GET    /company/{ticker}           company metadata, creates if new — auth required
 
 POST   /analysis/run                       check free limit, trigger background task
-GET    /analysis/{id}/status               status + stage + elapsed (polled every 3s)
-GET    /analysis/company/{ticker}          latest completed result + red flags
-GET    /analysis/company/{ticker}/history  score history, oldest first, for trend chart
+GET    /analysis/{id}/status               status + stage + elapsed (polled every 3s) — auth required
+GET    /analysis/company/{ticker}          latest completed result + red flags — auth required
+GET    /analysis/company/{ticker}/history  score history, oldest first, for trend chart — auth required
+GET    /analysis/compare?tickers=          up to 5 tickers, side-by-side latest results — auth required
 
-GET    /report/company/{ticker}    markdown report content
+GET    /report/company/{ticker}    markdown report content — auth required
 
 GET    /watchlist                  user's list with latest scores
 POST   /watchlist                  add company (409 if duplicate)
@@ -1031,6 +1070,11 @@ DELETE /watchlist/{ticker}         remove company
 GET    /alerts                     user's risk-band-change alerts + unread_count
 POST   /alerts/{id}/read           mark one alert read (404 if not owned)
 ```
+
+All routes not marked "no auth" above already required `get_current_user`
+(`backend/app/api/deps.py`) before Phase 54 except the seven now explicitly marked
+"— auth required" — see the Phase 54 amendment under "Constitution & Governance
+Documents" for why and what changed.
 
 ---
 

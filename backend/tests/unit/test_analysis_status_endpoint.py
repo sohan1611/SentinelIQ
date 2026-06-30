@@ -8,11 +8,19 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 
+import pytest
+
 from app.api.v1.routes.analysis import get_analysis_status
 from app.models.analysis_result import AnalysisResult
+from app.models.user import User
 
 
-async def test_get_analysis_status_maps_error_to_analysis_interrupted():
+@pytest.fixture
+def current_user():
+    return User(id=uuid.uuid4(), email="test@example.com", hashed_pw="x")
+
+
+async def test_get_analysis_status_maps_error_to_analysis_interrupted(current_user):
     analysis = AnalysisResult(
         id=uuid.uuid4(),
         company_id=uuid.uuid4(),
@@ -23,13 +31,13 @@ async def test_get_analysis_status_maps_error_to_analysis_interrupted():
     db = AsyncMock()
     db.get = AsyncMock(return_value=analysis)
 
-    result = await get_analysis_status(str(analysis.id), db=db)
+    result = await get_analysis_status(str(analysis.id), db=db, current_user=current_user)
 
     assert result["status"] == "error"
     assert result["stage"] == "Analysis interrupted"
 
 
-async def test_get_analysis_status_running_stage_unaffected():
+async def test_get_analysis_status_running_stage_unaffected(current_user):
     analysis = AnalysisResult(
         id=uuid.uuid4(),
         company_id=uuid.uuid4(),
@@ -40,7 +48,7 @@ async def test_get_analysis_status_running_stage_unaffected():
     db = AsyncMock()
     db.get = AsyncMock(return_value=analysis)
 
-    result = await get_analysis_status(str(analysis.id), db=db)
+    result = await get_analysis_status(str(analysis.id), db=db, current_user=current_user)
 
     assert result["status"] == "running"
     assert result["stage"] == "forensics"
