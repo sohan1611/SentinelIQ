@@ -15,6 +15,7 @@ from fastapi import HTTPException
 from app.api.v1.routes.analysis import get_analysis_history, ANALYSIS_HISTORY_LIMIT
 from app.models.company import Company
 from app.models.analysis_result import AnalysisResult
+from app.models.user import User
 
 
 def _execute_result(value, *, first=False):
@@ -31,7 +32,12 @@ def company():
     return Company(id=uuid.uuid4(), name="Acme Corp", ticker="ACME", sector="Tech", exchange="NASDAQ")
 
 
-async def test_history_returns_chronological_order(company):
+@pytest.fixture
+def current_user():
+    return User(id=uuid.uuid4(), email="test@example.com", hashed_pw="x")
+
+
+async def test_history_returns_chronological_order(company, current_user):
     now = datetime.now(timezone.utc)
     # DB query is newest-first; the route must reverse this.
     rows = [
@@ -47,43 +53,43 @@ async def test_history_returns_chronological_order(company):
         _execute_result(rows),
     ])
 
-    result = await get_analysis_history("ACME", db=db)
+    result = await get_analysis_history("ACME", db=db, current_user=current_user)
 
     assert [r.integrity_score for r in result] == [70.0, 80.0]
 
 
-async def test_history_lowercase_ticker_is_normalized(company):
+async def test_history_lowercase_ticker_is_normalized(company, current_user):
     db = AsyncMock()
     db.execute = AsyncMock(side_effect=[
         _execute_result(company, first=True),
         _execute_result([]),
     ])
 
-    await get_analysis_history("acme", db=db)
+    await get_analysis_history("acme", db=db, current_user=current_user)
 
     # First call is the company lookup -- assert it queried the uppercased ticker.
     company_query = str(db.execute.await_args_list[0].args[0])
     assert "companies.ticker" in company_query
 
 
-async def test_history_404_when_company_missing():
+async def test_history_404_when_company_missing(current_user):
     db = AsyncMock()
     db.execute = AsyncMock(return_value=_execute_result(None, first=True))
 
     with pytest.raises(HTTPException) as exc_info:
-        await get_analysis_history("ZZZZ", db=db)
+        await get_analysis_history("ZZZZ", db=db, current_user=current_user)
 
     assert exc_info.value.status_code == 404
 
 
-async def test_history_empty_list_when_no_completed_analyses(company):
+async def test_history_empty_list_when_no_completed_analyses(company, current_user):
     db = AsyncMock()
     db.execute = AsyncMock(side_effect=[
         _execute_result(company, first=True),
         _execute_result([]),
     ])
 
-    result = await get_analysis_history("ACME", db=db)
+    result = await get_analysis_history("ACME", db=db, current_user=current_user)
 
     assert result == []
 

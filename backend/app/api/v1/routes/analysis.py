@@ -104,7 +104,7 @@ async def run_analysis(
 
 
 @router.get("/compare", response_model=list[CompareItemResponse])
-async def compare_analyses(tickers: str, db: AsyncSession = Depends(get_db)):
+async def compare_analyses(tickers: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Phase 37 (F5, scoped to a comparison view): each requested ticker's
     latest completed analysis, side by side. Read-only over data that
     already exists -- no scoring changes, no new tables."""
@@ -154,7 +154,7 @@ async def compare_analyses(tickers: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/{analysis_id}/status", response_model=AnalysisStatusResponse)
-async def get_analysis_status(analysis_id: str, db: AsyncSession = Depends(get_db)):
+async def get_analysis_status(analysis_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     analysis = await db.get(AnalysisResult, analysis_id)
     if not analysis:
         raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Analysis not found"}})
@@ -180,7 +180,7 @@ async def get_analysis_status(analysis_id: str, db: AsyncSession = Depends(get_d
 
 
 @router.get("/company/{ticker}")
-async def get_latest_analysis(ticker: str, db: AsyncSession = Depends(get_db)):
+async def get_latest_analysis(ticker: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     ticker = ticker.upper()
     comp_res = await db.execute(select(Company).where(Company.ticker == ticker))
     company = comp_res.scalars().first()
@@ -207,7 +207,7 @@ async def get_latest_analysis(ticker: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/company/{ticker}/history", response_model=list[AnalysisHistoryItem])
-async def get_analysis_history(ticker: str, db: AsyncSession = Depends(get_db)):
+async def get_analysis_history(ticker: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     ticker = ticker.upper()
     comp_res = await db.execute(select(Company).where(Company.ticker == ticker))
     company = comp_res.scalars().first()
