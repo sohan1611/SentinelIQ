@@ -13,6 +13,7 @@ from fastapi import HTTPException
 from app.api.v1.routes.analysis import compare_analyses, COMPARE_MAX_TICKERS
 from app.models.company import Company
 from app.models.analysis_result import AnalysisResult
+from app.models.user import User
 
 
 def _execute_result(value, *, first=False):
@@ -40,7 +41,12 @@ def msft():
     return Company(id=uuid.uuid4(), name="Microsoft Corp.", ticker="MSFT", sector="Tech", exchange="NASDAQ")
 
 
-async def test_two_companies_both_analyzed(aapl, msft):
+@pytest.fixture
+def current_user():
+    return User(id=uuid.uuid4(), email="test@example.com", hashed_pw="x")
+
+
+async def test_two_companies_both_analyzed(aapl, msft, current_user):
     now = datetime.now(timezone.utc)
     aapl_analysis = AnalysisResult(id=uuid.uuid4(), company_id=aapl.id, run_at=now, status="complete", integrity_score=72.0)
     msft_analysis = AnalysisResult(id=uuid.uuid4(), company_id=msft.id, run_at=now, status="complete", integrity_score=88.0)
@@ -55,7 +61,7 @@ async def test_two_companies_both_analyzed(aapl, msft):
         _scalar_result(0),
     ])
 
-    result = await compare_analyses("AAPL,MSFT", db=db)
+    result = await compare_analyses("AAPL,MSFT", db=db, current_user=current_user)
 
     assert len(result) == 2
     assert result[0].ticker == "AAPL"
@@ -67,14 +73,14 @@ async def test_two_companies_both_analyzed(aapl, msft):
     assert result[1].red_flag_count == 0
 
 
-async def test_unknown_ticker_marked_not_found_without_querying_analysis():
+async def test_unknown_ticker_marked_not_found_without_querying_analysis(current_user):
     db = AsyncMock()
     db.execute = AsyncMock(side_effect=[
         _execute_result(None, first=True),  # ZZZZ: no company row
         _execute_result(None, first=True),  # QQQQ: no company row
     ])
 
-    result = await compare_analyses("ZZZZ,QQQQ", db=db)
+    result = await compare_analyses("ZZZZ,QQQQ", db=db, current_user=current_user)
 
     assert result[0].ticker == "ZZZZ"
     assert result[0].found is False
@@ -86,7 +92,7 @@ async def test_unknown_ticker_marked_not_found_without_querying_analysis():
     assert db.execute.await_count == 2
 
 
-async def test_known_company_with_no_completed_analysis(aapl):
+async def test_known_company_with_no_completed_analysis(aapl, current_user):
     db = AsyncMock()
     db.execute = AsyncMock(side_effect=[
         _execute_result(aapl, first=True),
@@ -95,33 +101,33 @@ async def test_known_company_with_no_completed_analysis(aapl):
         _execute_result(None, first=True),
     ])
 
-    result = await compare_analyses("AAPL,AAPL", db=db)
+    result = await compare_analyses("AAPL,AAPL", db=db, current_user=current_user)
 
     assert result[0].found is True
     assert result[0].company_name == "Apple Inc."
     assert result[0].analysis is None  # distinct from found=False -- a real company, just not analyzed
 
 
-async def test_rejects_fewer_than_two_tickers():
+async def test_rejects_fewer_than_two_tickers(current_user):
     db = AsyncMock()
 
     with pytest.raises(HTTPException) as exc_info:
-        await compare_analyses("AAPL", db=db)
+        await compare_analyses("AAPL", db=db, current_user=current_user)
 
     assert exc_info.value.status_code == 400
 
 
-async def test_rejects_more_than_max_tickers():
+async def test_rejects_more_than_max_tickers(current_user):
     db = AsyncMock()
     too_many = ",".join(f"T{i}" for i in range(COMPARE_MAX_TICKERS + 1))
 
     with pytest.raises(HTTPException) as exc_info:
-        await compare_analyses(too_many, db=db)
+        await compare_analyses(too_many, db=db, current_user=current_user)
 
     assert exc_info.value.status_code == 400
 
 
-async def test_tickers_are_normalized_to_uppercase_and_trimmed(aapl):
+async def test_tickers_are_normalized_to_uppercase_and_trimmed(aapl, current_user):
     db = AsyncMock()
     db.execute = AsyncMock(side_effect=[
         _execute_result(aapl, first=True),
@@ -130,7 +136,7 @@ async def test_tickers_are_normalized_to_uppercase_and_trimmed(aapl):
         _execute_result(None, first=True),
     ])
 
-    result = await compare_analyses(" aapl , AAPL ", db=db)
+    result = await compare_analyses(" aapl , AAPL ", db=db, current_user=current_user)
 
     assert result[0].ticker == "AAPL"
     assert result[1].ticker == "AAPL"
