@@ -1,5 +1,12 @@
 # PROJECT STATUS — SentinelIQ
 
+> **⚠️ HISTORICAL SNAPSHOT (mid-June 2026).** The project has since shipped through Phase 54
+> (live on Render + Vercel; EDGAR as-filed data, AI grounding, rate limiting, budget guard,
+> watchlist alerting, and more are all done). Much of what this document frames as "future"
+> or "not yet built" is complete. See **`PROJECT_STATE.md`** for current status and which
+> items genuinely remain open. Retained for history — do not treat its forward / "never
+> done" framing as current.
+
 **Prepared by:** Claude Code (Sonnet), Lead Implementation Engineer
 **Prepared for:** Opus (Chief Architect review)
 **Date:** 2026-06-15
