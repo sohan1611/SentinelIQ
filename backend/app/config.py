@@ -18,6 +18,11 @@ class Settings(BaseSettings):
     # on this new var; operators should override with a real contact.
     SEC_EDGAR_USER_AGENT: str = "SentinelIQ research contact@sentineliq.io"
 
+    # Emergency lever when database quota is exhausted: disabling these stops all
+    # background DB traffic while leaving the API fully functional.
+    ENABLE_REAPER_LOOP: bool = True
+    ENABLE_WATCHLIST_REFRESHER: bool = True
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     @field_validator("SECRET_KEY")

@@ -31,12 +31,23 @@ _STATUS_ERROR_CODES = {
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Schema is managed via Alembic migrations (alembic upgrade head) -- see CLAUDE.md
-    reaper_task = asyncio.create_task(reaper_loop())
-    refresher_task = asyncio.create_task(watchlist_refresher_loop())
+    background_tasks = []
+    if settings.ENABLE_REAPER_LOOP:
+        background_tasks.append(asyncio.create_task(reaper_loop()))
+    else:
+        logger.warning(
+            "ENABLE_REAPER_LOOP is disabled; on-demand reaping still covers correctness"
+        )
+    if settings.ENABLE_WATCHLIST_REFRESHER:
+        background_tasks.append(asyncio.create_task(watchlist_refresher_loop()))
+    else:
+        logger.warning(
+            "ENABLE_WATCHLIST_REFRESHER is disabled; scheduled watchlist refreshes are paused"
+        )
     yield
     # Cleanup on shutdown
-    reaper_task.cancel()
-    refresher_task.cancel()
+    for task in background_tasks:
+        task.cancel()
     await engine.dispose()
 
 app = FastAPI(
