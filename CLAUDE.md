@@ -563,6 +563,46 @@ Amendments are explicit and dated — never silent behavioral changes inside a f
 > happened. Verified live: `/health` registers with **0** dependencies, `/health/db`
 > with 1.
 
+> **Phase 60 amendment (2026-08-04):** safe mode + on-demand reaping — finishes what
+> Phase 59 started. Phase 59 left ~30 CU-hrs/month of pure *idle* reaper polling; this
+> removes it and adds an emergency kill switch for when the DB quota is exhausted.
+>
+> **On-demand reaping.** `reaper.py` gains `maybe_reap_stuck_analyses(session)`, called
+> from `GET /analysis/{id}/status` — the one endpoint where a stuck row is actually
+> observed. The insight: **a stuck analysis only matters when someone looks at it**, and
+> doing the work during real traffic is free because the database is already awake, whereas
+> timer polling wakes it purely to find nothing. Guarded by an in-process throttle,
+> `REAP_MIN_INTERVAL_SECONDS = 60` — load-bearing, because the frontend polls that endpoint
+> every 3 seconds and an unthrottled reap would issue an `UPDATE` per poll. The call is
+> wrapped in `try/except` and logs a warning on failure: an opportunistic optimisation
+> riding on a read path must never be able to break the read (covered by
+> `test_get_analysis_status_survives_a_failing_ondemand_reap`). It runs **before** the row
+> is fetched, so the status served already reflects the reap. A successful on-demand reap
+> also updates `_last_run_at`/`_last_reaped_count` — with the timer loop disabled those are
+> the only updates those fields would get, and `/health` would otherwise report the reaper
+> permanently stale.
+>
+> **Safe mode.** `ENABLE_REAPER_LOOP` and `ENABLE_WATCHLIST_REFRESHER` (both
+> `bool = True` in `config.py`, env-overridable) gate `asyncio.create_task` in `main.py`'s
+> `lifespan`, which now collects started tasks in a list and cancels only those. Setting
+> both to `false` yields **zero background database traffic** while the API stays fully
+> functional — the intended posture when the Neon compute quota is exhausted or near its
+> limit. Each disabled loop logs a startup warning naming the flag, so a silent loop is
+> never a mystery. `get_reaper_status()` gains `loop_enabled` and forces `stale = False`
+> when the loop is disabled: a deliberately-disabled loop is not "stale," and reporting it
+> as such would be a permanent false alarm on `/health` in safe mode. Both flags default
+> to `True`, so existing deployments are unchanged — safe mode is opt-in.
+>
+> **Test-isolation note worth remembering.** Wiring the reap into the status route broke
+> `test_health_endpoint.py` in full-suite runs only (it passed in isolation).
+> `test_analysis_status_endpoint.py` passes an `AsyncMock` session, so the real reap stored
+> `session.execute(...).rowcount` — a `Mock`, not an `int` — into the module-level
+> `_last_reaped_count`, which then leaked for the rest of the session and made `/health`
+> unserialisable. Fixed with an autouse fixture neutralising the reap in those tests
+> (they cover stage-text mapping, not reaping). The lesson: module-level mutable state
+> written from a request path is a test-pollution vector, and order-dependent failures
+> hide from single-file runs.
+
 ---
 
 ## Git Commit Identity — MANDATORY

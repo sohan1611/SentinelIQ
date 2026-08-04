@@ -17,3 +17,22 @@ no transcripts, never any secrets.
   `/health/db` with 1. Claude fixed a 3-space list-indent regression Codex left in
   `docs/deployment.md`, and added the Phase 59 amendment + API-route table entry to
   `CLAUDE.md` (architect-owned, deliberately out of Codex's scope). Accepted.
+
+## 2026-08-04 14:10 — Work order 2 (Claude → Codex)
+- Task: Phase 60 safe mode + on-demand reaping — `ENABLE_REAPER_LOOP` /
+  `ENABLE_WATCHLIST_REFRESHER` flags gating the background loops, plus a throttled
+  `maybe_reap_stuck_analyses()` called from the analysis-status endpoint so idle reaper
+  polling drops to ~0. Spec embedded the exact current text of every region to edit, since
+  this sandbox blocks Codex from reading files.
+- Codex: reported accurately this time — 7 files changed, 5 new tests, correctly noted it
+  could not run the suite.
+- Review: logic was sound (throttle, health-state update, safe-mode staleness suppression).
+  Claude corrected three things: imports and the module logger had been inserted
+  mid-file in `analysis.py` (moved to the top per PEP 8 and the spec), the import block in
+  `reaper.py` was tidied, and the "Safe mode" doc section had been placed above the intro
+  of `docs/deployment.md` (moved to the ops section and expanded). Claude also fixed a real
+  defect neither the spec nor Codex caught: the new reap ran against the `AsyncMock` session
+  in `test_analysis_status_endpoint.py`, leaking a `Mock` into the reaper's module-level
+  `_last_reaped_count` and breaking `/health` serialisation later in the same session — a
+  full-suite-only failure. Added an autouse fixture plus a fail-safe test. Verified: 263
+  passed, no order-dependence. Accepted.

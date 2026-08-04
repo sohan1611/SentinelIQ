@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Request
@@ -15,6 +16,9 @@ from app.models.red_flag import RedFlag
 from app.schemas.analysis import AnalysisRunRequest, AnalysisRunResponse, AnalysisStatusResponse, AnalysisResultResponse, AnalysisHistoryItem, RedFlagResponse, CompareItemResponse
 from app.services.audit_log import log_action
 from app.tasks.analysis_worker import run_full_analysis
+from app.tasks.reaper import maybe_reap_stuck_analyses
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -155,6 +159,11 @@ async def compare_analyses(tickers: str, db: AsyncSession = Depends(get_db), cur
 
 @router.get("/{analysis_id}/status", response_model=AnalysisStatusResponse)
 async def get_analysis_status(analysis_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    try:
+        await maybe_reap_stuck_analyses(db)
+    except Exception:
+        logger.warning("On-demand reap failed; serving analysis status anyway", exc_info=True)
+
     analysis = await db.get(AnalysisResult, analysis_id)
     if not analysis:
         raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Analysis not found"}})
