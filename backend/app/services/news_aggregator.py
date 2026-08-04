@@ -4,11 +4,62 @@ import time
 import feedparser
 from datetime import datetime, timedelta, timezone
 from urllib.parse import quote
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from app.services import cache
 
 logger = logging.getLogger(__name__)
 
 NEWS_FETCH_TIMEOUT_SECONDS = 15.0
+
+# VADER gives negation-, intensifier-, and punctuation-aware sentiment, unlike
+# the previous flat keyword bag which scored "profit warning" as neutral and
+# "no fraud" as negative (it just counted +1/-1 per matching word, blind to
+# word order and negation). VADER is rule-based and fully deterministic --
+# preserving ADR-004's "determinism for judgment" -- and ships its own
+# lexicon, so scoring stays offline and $0.
+_analyzer = SentimentIntensityAnalyzer()
+
+# Finance-domain valence overrides (VADER scale, roughly -4..+4). VADER is
+# tuned on general/social English, where "beat"/"miss" carry the wrong sign for
+# earnings and terms like "restatement"/"downgrade" are unknown (scored 0).
+# These corrections make the news signal reflect financial meaning; VADER still
+# layers its own negation handling on top, so e.g. "no restatement" is handled.
+_FINANCE_LEXICON = {
+    # positive in a financial context
+    "beat": 1.9, "beats": 1.9, "outperform": 1.9, "outperforms": 1.9,
+    "upgrade": 1.7, "upgraded": 1.7, "buyback": 1.2, "accretive": 1.5,
+    "profit": 1.4, "surge": 1.6, "surges": 1.6, "rally": 1.3,
+    # negative in a financial context
+    "miss": -1.6, "misses": -1.6, "missed": -1.6,
+    "downgrade": -1.9, "downgraded": -1.9,
+    "restatement": -2.6, "restate": -2.4, "restated": -2.4,
+    "probe": -1.9, "subpoena": -2.4, "investigation": -2.0,
+    "lawsuit": -1.9, "litigation": -1.6,
+    "resign": -1.3, "resigned": -1.3, "resignation": -1.3,
+    "delisting": -2.5, "delisted": -2.5, "bankruptcy": -3.0,
+    "default": -1.9, "impairment": -1.6, "writedown": -1.8,
+    "misconduct": -2.6, "warning": -1.5,
+    "plunge": -2.0, "plunges": -2.0, "slump": -1.7, "halted": -1.8,
+}
+_analyzer.lexicon.update(_FINANCE_LEXICON)
+
+
+def _score_headlines(headlines: list[str]) -> float:
+    """Map a list of headlines to a 0-100 news-sentiment score.
+
+    Each headline's VADER ``compound`` score (in [-1, 1], negation- and
+    intensifier-aware) is averaged, then linearly mapped to [0, 100] where 50
+    is neutral. Pure/offline/deterministic (no I/O), so it is unit-testable
+    without touching the network. At most the first 20 headlines are used, and
+    empty/blank input returns 50.0 (neutral) -- matching the prior fallback.
+    """
+    usable = [h for h in headlines[:20] if h and h.strip()]
+    if not usable:
+        return 50.0
+    compounds = [_analyzer.polarity_scores(h)["compound"] for h in usable]
+    avg = sum(compounds) / len(compounds)
+    avg = max(-1.0, min(1.0, avg))
+    return ((avg + 1.0) / 2.0) * 100.0
 
 
 async def _fetch_google_news(company_name: str, ticker: str) -> list[dict]:
@@ -97,27 +148,7 @@ async def fetch_news_sentiment(company_name: str, ticker: str) -> float:
     if not headlines:
         return 50.0
 
-    positive_words = {"profit", "growth", "beat", "strong", "record", "raised", "upgraded"}
-    negative_words = {"fraud", "loss", "miss", "decline", "investigation", "sec", "resigned",
-                      "lawsuit", "warning", "downgrade", "restatement", "concern"}
-
-    scores = []
-    for h in headlines[:20]:
-        score = 0
-        words = set(h.replace(",", "").replace(".", "").split())
-        for w in words:
-            if w in positive_words:
-                score += 1
-            if w in negative_words:
-                score -= 1
-        scores.append(score)
-
-    if not scores:
-        return 50.0
-
-    raw_avg = sum(scores) / len(scores)
-    raw_avg = max(-1.0, min(1.0, raw_avg))
-    final_score = ((raw_avg + 1) / 2) * 100
+    final_score = _score_headlines(headlines)
 
     cache.set(cache_key, final_score, ttl_seconds=7200)
     return final_score

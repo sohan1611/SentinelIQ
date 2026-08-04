@@ -13,6 +13,7 @@ yfinance==0.2.40
 curl_cffi>=0.7
 google-genai>=1.0.0
 feedparser==6.0.11
+vaderSentiment==3.3.2
 python-dotenv==1.2.2
 numpy==2.4.6
 pandas==3.0.3
