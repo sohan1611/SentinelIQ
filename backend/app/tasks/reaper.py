@@ -5,12 +5,14 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import or_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import AsyncSessionLocal
 from app.models.analysis_result import AnalysisResult
 
 logger = logging.getLogger(__name__)
 
 STUCK_ANALYSIS_THRESHOLD_MINUTES = 10
+REAP_MIN_INTERVAL_SECONDS = 60
 # Polling every two minutes kept Neon's compute permanently awake for no benefit:
 # analyses are not eligible until STUCK_ANALYSIS_THRESHOLD_MINUTES (10) has elapsed.
 # A 30-minute interval makes worst-case detection roughly 40 minutes (interval plus
@@ -26,6 +28,29 @@ _STALE_AFTER_SECONDS = REAPER_INTERVAL_SECONDS * 3
 # (count=0 still proves the loop is alive).
 _last_run_at: datetime | None = None
 _last_reaped_count: int = 0
+_last_ondemand_reap_at: datetime | None = None
+
+
+async def maybe_reap_stuck_analyses(session: AsyncSession) -> int | None:
+    """Reap during real traffic: a stuck analysis matters only when someone looks at it.
+
+    This is free because the database is already awake, unlike timer polling that wakes it
+    purely to find nothing.
+    """
+    global _last_ondemand_reap_at, _last_run_at, _last_reaped_count
+
+    now = datetime.now(timezone.utc)
+    if (
+        _last_ondemand_reap_at is not None
+        and (now - _last_ondemand_reap_at).total_seconds() < REAP_MIN_INTERVAL_SECONDS
+    ):
+        return None
+
+    _last_ondemand_reap_at = now
+    reaped_count = await reap_stuck_analyses(session)
+    _last_run_at = datetime.now(timezone.utc)
+    _last_reaped_count = reaped_count
+    return reaped_count
 
 
 def get_reaper_status() -> dict:
@@ -35,14 +60,21 @@ def get_reaper_status() -> dict:
     either it never started, or it's stuck/crashed past its own exception
     handler. This is a STRONGER signal than the per-reap warning log, which
     only fires when something was actually reaped.
+
+    A deliberately-disabled loop is never stale, avoiding a permanent false
+    alarm when safe mode is enabled.
     """
     is_stale = (
-        _last_run_at is None
-        or (datetime.now(timezone.utc) - _last_run_at).total_seconds() > _STALE_AFTER_SECONDS
+        settings.ENABLE_REAPER_LOOP
+        and (
+            _last_run_at is None
+            or (datetime.now(timezone.utc) - _last_run_at).total_seconds() > _STALE_AFTER_SECONDS
+        )
     )
     return {
         "last_run_at": _last_run_at.isoformat() if _last_run_at else None,
         "last_reaped_count": _last_reaped_count,
+        "loop_enabled": settings.ENABLE_REAPER_LOOP,
         "stale": is_stale,
     }
 
