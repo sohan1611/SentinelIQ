@@ -528,6 +528,41 @@ Amendments are explicit and dated — never silent behavioral changes inside a f
 > "UNAUTHORIZED", "message": "Could not validate credentials"}}` — not a bare
 > `detail` string, regardless of which route triggers it.
 
+> **Phase 59 amendment (2026-08-04):** idle-compute reduction — the Neon free tier's
+> 100 CU-hour monthly allowance was fully exhausted (110.33 CU-hrs, compute cut off).
+> Root cause was **not** analysis traffic: the backend touched the database more often
+> than Neon's 5-minute scale-to-zero window, continuously, so compute **never idled** —
+> 0.25 CU × 730 h ≈ 182 CU-hrs/month against a 100 CU-hr allowance, exhausted around
+> day 16. Two independent causes, each sufficient on its own (fixing only one would have
+> saved nothing):
+> 1. `reaper.py`'s `reaper_loop` ran a DB `UPDATE` every **120 s**.
+> 2. `GET/HEAD /health` ran `SELECT 1` on **every** probe — and it is polled by
+>    UptimeRobot (~5 min, Phase 30) *and* on Render's own health-check schedule, which
+>    cannot be disabled.
+>
+> **`/health` is now a shallow liveness probe that makes no database call at all**,
+> returning `{"status": "ok", "reaper": {...}}`. The `"database"` key was deliberately
+> dropped rather than left reporting a check no longer performed. The deep check moved
+> to a new **`GET/HEAD /health/db`** → `{"status": "ok", "database": "ok"}`, preserving
+> the identical 503 `SERVICE_UNAVAILABLE` error envelope; it is for manual/occasional
+> diagnosis and must never be used as a polling target. Both routes keep the stacked
+> `@router.get` + `@router.head` decorators — HEAD is load-bearing (Phase 30's outage
+> was a bare 405 to UptimeRobot's HEAD probes) — and both stay unauthenticated.
+>
+> `REAPER_INTERVAL_SECONDS` 120 → **1800** (30 min): the old cadence bought nothing,
+> since `STUCK_ANALYSIS_THRESHOLD_MINUTES` (10) means a row isn't reapable for 10
+> minutes anyway. Worst-case detection becomes ~40 min; the immediate startup pass is
+> unchanged, so restart recovery is unaffected. `REFRESH_INTERVAL_SECONDS` 3600 →
+> **21600** (6 h) — 4 ticks/day × `MAX_REFRESHES_PER_TICK` (3) still comfortably serves
+> the unchanged 24-hour `STALE_AFTER_HOURS` target.
+>
+> Locked by `backend/tests/unit/test_health_endpoint.py`, which asserts `/health` takes
+> no `db` parameter and — via `TestClient` with a `get_db` override that raises — that
+> `/health` still returns 200 when the database is entirely unavailable. That test fails
+> the moment anyone re-adds a DB call to `/health`, which is precisely how this outage
+> happened. Verified live: `/health` registers with **0** dependencies, `/health/db`
+> with 1.
+
 ---
 
 ## Git Commit Identity — MANDATORY
@@ -1046,7 +1081,9 @@ unauthenticated and unversioned (Render hits it directly to detect
 free-tier spin-down/restart cycles — ADR-012).
 
 ```
-GET    /health                      DB connectivity probe, no auth
+GET    /health                      shallow liveness + reaper status, NO DB call, no auth
+GET    /health/db                   deep DB connectivity probe, no auth — manual use only,
+                                    never a polling target (Phase 59)
 
 POST   /auth/register              create user, return JWT
 POST   /auth/login                 OAuth2 form, return JWT
