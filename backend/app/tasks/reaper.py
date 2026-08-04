@@ -11,7 +11,11 @@ from app.models.analysis_result import AnalysisResult
 logger = logging.getLogger(__name__)
 
 STUCK_ANALYSIS_THRESHOLD_MINUTES = 10
-REAPER_INTERVAL_SECONDS = 120
+# Polling every two minutes kept Neon's compute permanently awake for no benefit:
+# analyses are not eligible until STUCK_ANALYSIS_THRESHOLD_MINUTES (10) has elapsed.
+# A 30-minute interval makes worst-case detection roughly 40 minutes (interval plus
+# threshold), an acceptable free-tier trade; the startup pass still recovers immediately.
+REAPER_INTERVAL_SECONDS = 1800
 # S-6: tolerate one slow iteration before calling the loop "stale" --
 # 3x interval, not 1x, to avoid false alarms from a single delayed tick.
 _STALE_AFTER_SECONDS = REAPER_INTERVAL_SECONDS * 3
