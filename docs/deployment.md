@@ -126,3 +126,23 @@ external accounts:
   as "Analysis was interrupted. Please retry." instead of hanging forever.
 - Render free Postgres instances expire after 90 days unless upgraded — out of scope for
   this phase, note for a future ops pass.
+
+## Safe mode — stopping all background database traffic (Phase 60)
+
+The managed Postgres (Neon) free tier meters **compute-hours**, and its compute only stops
+billing once it has been idle long enough to suspend (~5 min). Any recurring background
+query prevents that suspension and burns the monthly allowance around the clock — which is
+exactly what exhausted it once already (see the Phase 59/60 amendments in `CLAUDE.md`).
+
+Two environment variables, both defaulting to `true`, turn the background loops off:
+
+| Key | Effect when `false` |
+|---|---|
+| `ENABLE_REAPER_LOOP` | Stops the periodic stuck-analysis sweep. Correctness is preserved — reaping still happens on demand whenever an analysis status is requested. |
+| `ENABLE_WATCHLIST_REFRESHER` | Pauses scheduled watchlist re-analysis. Users can still analyze on demand; only the automatic refresh stops. |
+
+Set both to `false` in Render's environment when the compute quota is exhausted or close to
+it. The API stays fully functional; `/health` never touched the database (Phase 59), so
+liveness checks keep working with the database completely idle. Both loops log a warning at
+startup when disabled, so a silent loop is never a mystery. Revert to `true` once the quota
+resets.
