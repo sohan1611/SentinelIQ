@@ -14,21 +14,42 @@ router = APIRouter()
 
 @router.get("/health")
 @router.head("/health")
-async def health_check(db: AsyncSession = Depends(get_db)):
-    """Unauthenticated liveness/readiness probe (ADR-012).
+async def health_check():
+    """Unauthenticated shallow liveness probe (ADR-012).
 
-    Confirms the API process is up and can reach the database -- used by
-    Render to detect free-tier spin-down/restart cycles. HEAD is supported
-    explicitly because uptime monitors (e.g. UptimeRobot) default to HEAD
-    requests for HTTP(s) checks, which otherwise hit a bare 405 here.
+    Confirms only that the API process is up. It deliberately makes NO
+    database call: Render and uptime monitors poll this path on a schedule,
+    and a ``SELECT 1`` on every probe prevents Neon free-tier compute from
+    reaching its five-minute idle suspension window. Use ``/health/db`` for
+    the deep, manual/occasional database-connectivity check instead.
+
+    HEAD is supported explicitly because uptime monitors (e.g. UptimeRobot)
+    default to HEAD requests for HTTP(s) checks, which otherwise hit a bare
+    405 here. The Phase 30 false-alarm lesson still applies: a healthy backend
+    must not be reported down simply because the monitoring method is HEAD.
 
     The "reaper" field (S-6) surfaces the stuck-analysis reaper's own
     health -- the strongest internal pipeline-health signal this app has,
-    previously visible only in stdout logs nobody watches. Deliberately
-    does NOT affect this endpoint's status code: a stale reaper is a real
-    degradation worth surfacing, but conflating it with "the API/DB is
-    down" risks the exact false-alarm pattern Phase 30 traced back to a
-    missing HEAD handler (a healthy backend wrongly reported as down).
+    previously visible only in stdout logs nobody watches. Deliberately does
+    NOT affect this endpoint's status code: a stale reaper is a real
+    degradation worth surfacing, but it is not evidence that the API is down.
+    """
+    return {"status": "ok", "reaper": get_reaper_status()}
+
+
+@router.get("/health/db")
+@router.head("/health/db")
+async def database_health_check(db: AsyncSession = Depends(get_db)):
+    """Unauthenticated deep database-connectivity probe (ADR-012).
+
+    This retains the explicit ``SELECT 1`` check for manual and occasional
+    diagnostics. It must not be used for Render or uptime-monitor health
+    checks: routine database traffic keeps Neon's free-tier compute awake and
+    exhausts its limited monthly allowance instead of letting it scale to zero.
+
+    HEAD is supported for parity with the shallow probe and because uptime
+    monitors default to HEAD; use it only when a deliberate deep check is
+    required, not as a polling target.
     """
     try:
         await db.execute(text("SELECT 1"))
@@ -39,4 +60,4 @@ async def health_check(db: AsyncSession = Depends(get_db)):
             detail={"error": {"code": "SERVICE_UNAVAILABLE", "message": "Database connectivity check failed"}},
         )
 
-    return {"status": "ok", "database": "ok", "reaper": get_reaper_status()}
+    return {"status": "ok", "database": "ok"}

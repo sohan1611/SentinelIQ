@@ -23,7 +23,8 @@ logger = logging.getLogger(__name__)
 # yfinance rate-limiting already observed (Phase 43) and the shared
 # GEMINI_DAILY_BUDGET=200/day ceiling this loop draws from like any caller.
 STALE_AFTER_HOURS = 24
-REFRESH_INTERVAL_SECONDS = 3600
+# Six-hour polling preserves the 24-hour freshness target without keeping Neon compute awake.
+REFRESH_INTERVAL_SECONDS = 21600
 MAX_REFRESHES_PER_TICK = 3
 
 

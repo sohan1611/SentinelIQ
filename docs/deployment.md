@@ -51,7 +51,7 @@ external accounts:
   actual Postgres instance was not possible in this sandbox (no Docker daemon, no native
   Postgres install available) — the start command in step 2 below runs
   `alembic upgrade head` for real on first deploy, and the post-deploy checklist (step 4)
-  confirms it succeeded via `/health`.
+  confirms database connectivity via `/health/db`.
 - `frontend`: `npm run build` succeeds — production build, type checking, and static page
   generation all pass for all 16 routes.
 - `backend/Dockerfile` already exists and matches Render's expected shape (`pip install -r
@@ -60,8 +60,11 @@ external accounts:
   the build/start commands below.
 - `backend/app/database.py` has no `create_all` — schema is Alembic-only (ADR-012's
   "migrations gate deploys" requirement).
-- `/health` (Phase 10 Step 2) is unauthenticated and checks DB connectivity — use it as
-  Render's health check path.
+- `/health` (Phase 10 Step 2) is an unauthenticated, shallow liveness check with no
+  database access — use it as Render's health check path. This prevents scheduled
+  probes from keeping Neon free-tier compute awake instead of allowing it to idle.
+- `/health/db` is the unauthenticated deep database-connectivity check. Use it manually
+  or occasionally for diagnosis, never as a polling target.
 
 ## 1. Render — managed Postgres
 
@@ -84,7 +87,7 @@ external accounts:
   — running the migration before `uvicorn` starts ensures the schema is current on every
   deploy (ADR-012 "migrations gate deploys"); safe to repeat (Alembic no-ops if already at
   `head`).
-- Health check path: `/health`
+- Health check path: `/health` (shallow liveness; intentionally does not access the database)
 - Environment variables:
 
   | Key | Value |
@@ -107,7 +110,9 @@ external accounts:
 
 ## 4. Post-deploy verification checklist
 
-- `curl https://<render-url>/health` -> `{"status": "ok", "database": "ok"}`
+- `curl https://<render-url>/health` -> `{"status": "ok", "reaper": {...}}`
+- `curl https://<render-url>/health/db` -> `{"status": "ok", "database": "ok"}`
+  (manual deep database check; do not poll it)
 - Register a user via the deployed frontend, log in, run an analysis for a real ticker
   end-to-end, confirm the report renders.
 - Confirm no CORS errors in the browser console (`FRONTEND_URL` must match the Vercel
