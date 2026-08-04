@@ -11,7 +11,9 @@ Phase 34 scope: data fetch + extraction only. No scoring, no RedFlags, no
 pipeline wiring -- see MASTER_IMPLEMENTATION_PLAN.md Phase 34/35.
 """
 import logging
+import re
 import httpx
+from bs4 import BeautifulSoup
 from app.config import settings
 from app.services import cache
 
@@ -19,7 +21,22 @@ logger = logging.getLogger(__name__)
 
 TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
 COMPANYFACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
+SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik}.json"
 REQUEST_TIMEOUT_SECONDS = 20.0
+
+# Phase 58 spike: narrative-quality forms only (10-K/10-Q carry a real MD&A
+# section; other filing types on the submissions feed, e.g. 8-K/DEF 14A, do
+# not and are skipped).
+NARRATIVE_FORMS = {"10-K", "10-Q"}
+MDNA_ANCHOR = "management's discussion and analysis"  # display/docstring reference only
+# The apostrophe varies by filer/generator: real filings from Workiva-generated
+# HTML use a curly right-single-quote (U+2019), not the ASCII "'" -- a literal
+# match on MDNA_ANCHOR silently found zero matches on real Apple/Coca-Cola
+# filings during this spike (confirmed by direct inspection: "management" was
+# present, but the exact ASCII-apostrophe phrase was not). Matching either
+# apostrophe variant is required for this to work on real EDGAR HTML at all.
+MDNA_ANCHOR_PATTERN = re.compile(r"management[’']s discussion and analysis", re.IGNORECASE)
+MDNA_MAX_CHARS = 8000
 
 # XBRL us-gaap concept tags vary by company and era for the same logical
 # figure (e.g. a pre-2018 filer vs. one that adopted ASC 606 revenue
@@ -103,6 +120,176 @@ async def fetch_company_facts(cik: str) -> dict | None:
     data = resp.json()
     cache.set(cache_key, data, ttl_seconds=604800)  # 7 days -- filings change far less often than market data
     return data
+
+
+async def _fetch_submissions(cik: str) -> dict | None:
+    """Returns the parsed EDGAR filing-history JSON for a CIK (recent filings'
+    forms/accession-numbers/primary-documents/dates), or None on a 404 (no
+    submissions history) or any other fetch failure. Same shape/caching
+    pattern as fetch_company_facts -- filings change far less often than
+    market data, so a 7-day cache is safe."""
+    cache_key = f"edgar:submissions:{cik}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached if cached != {} else None
+
+    headers = {"User-Agent": settings.SEC_EDGAR_USER_AGENT}
+    url = SUBMISSIONS_URL.format(cik=cik)
+    async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT_SECONDS) as client:
+        try:
+            resp = await client.get(url, headers=headers)
+            if resp.status_code == 404:
+                logger.info(f"SEC EDGAR: no submissions history for CIK {cik}")
+                cache.set(cache_key, {}, ttl_seconds=604800)
+                return None
+            resp.raise_for_status()
+        except httpx.HTTPError as e:
+            logger.warning(f"SEC EDGAR submissions fetch failed for CIK {cik}: {e}")
+            return None
+
+    data = resp.json()
+    cache.set(cache_key, data, ttl_seconds=604800)  # 7 days
+    return data
+
+
+def extract_mdna(html: str) -> str | None:
+    """Best-effort extraction of a 10-K/10-Q's MD&A section from raw filing HTML.
+
+    Phase 58 spike. Filing HTML has no reliable machine-readable section
+    markers, and layout varies enormously by filer/era -- a generalized
+    parser is out of scope here. Heuristic: locate the LAST case-insensitive
+    occurrence of "management's discussion and analysis" in the plain text
+    (matching either apostrophe variant -- real Workiva-generated filings use
+    a curly "'", not ASCII "'"), on the assumption that earlier occurrences
+    are Table-of-Contents/cross-reference mentions and the last one is the
+    real heading. From there, take text up to the next top-level "Item N."
+    heading (period required -- see the inline comment below) or
+    MDNA_MAX_CHARS, whichever comes first.
+
+    KNOWN LIMITATION (found during this spike, confirmed against real live
+    AAPL/KO filings, not fixed -- flagged for whoever picks up the H2
+    EDGAR-narrative-pipeline work): the "last occurrence = the real heading"
+    assumption is not reliable. Some 10-Ks legitimately reference "Management's
+    Discussion and Analysis" by name a second time *inside the real section
+    itself* (e.g. Apple's 2025 10-K cross-references the *prior* year's 10-K's
+    MD&A when explaining an omitted multi-year comparison) -- when that
+    self-reference is the last occurrence, extraction starts a paragraph or
+    two into the real section rather than at its true heading. Usable in
+    practice (the excerpts sampled were still substantive, on-topic MD&A
+    prose) but not a formal section boundary. A more robust version would
+    need the original DOM structure (heading-tag level, not flattened text)
+    to disambiguate a heading from a same-text in-body mention -- that is a
+    real implementation cost, not a one-line fix, and is explicitly out of
+    scope for this time-boxed spike.
+
+    Returns None if the anchor phrase is not found at all -- callers must
+    treat that as "extraction failed for this filing," not an empty section.
+    """
+    soup = BeautifulSoup(html, "lxml")
+    text = soup.get_text(separator=" ")
+    text = re.sub(r"\s+", " ", text).strip()
+
+    anchor_matches = list(MDNA_ANCHOR_PATTERN.finditer(text))
+    if not anchor_matches:
+        return None
+
+    last_match = anchor_matches[-1]
+    start = last_match.start()
+
+    # Look for the next top-level "Item N." HEADING strictly after the MD&A
+    # heading text itself (offset past it so we don't immediately re-match
+    # "Item 7" inside "Item 7. Management's Discussion and Analysis...").
+    # The trailing "\." is deliberate and load-bearing: real MD&A sections
+    # open with a standard forward-looking-statements paragraph that itself
+    # cross-references OTHER item numbers inline (e.g. "...discussed in Part
+    # I, Item 1A of the 2025 Form 10-K...") -- without requiring the
+    # period, that inline mention is indistinguishable from a real heading
+    # and truncates the excerpt to ~100-1200 chars instead of the real,
+    # many-page section (confirmed against real AAPL/KO filings during this
+    # spike). A real heading is followed by "." (e.g. "Item 8. Financial
+    # Statements..."); an inline cross-reference is followed by a word like
+    # "of"/"under"/"in", never a period.
+    item_heading_pattern = re.compile(r"\bitem\s+\d+[a-z]?\.", re.IGNORECASE)
+    next_item_match = item_heading_pattern.search(text, last_match.end() + 20)
+
+    end = min(next_item_match.start(), start + MDNA_MAX_CHARS) if next_item_match else start + MDNA_MAX_CHARS
+
+    excerpt = text[start:end].strip()
+    return excerpt if excerpt else None
+
+
+async def fetch_management_statements(ticker: str, limit: int = 4) -> list[dict]:
+    """Phase 58 spike: returns up to `limit` most-recent 10-K/10-Q MD&A
+    excerpts as {period, text, source} dicts -- the exact shape
+    ConsistencyEngine.analyze() expects (see news_aggregator.py's
+    fetch_news_statements for the news-sourced equivalent this is a drop-in,
+    richer-text alternative to). Isolated spike function: not called from
+    analysis_worker.py or anywhere in the live pipeline. See
+    backend/scripts/spike_edgar_narrative.py for a manual demonstration.
+
+    Filings whose HTML doesn't yield an MD&A excerpt (extract_mdna returns
+    None) are skipped, not substituted with anything -- an empty return list
+    means "no usable narrative found," never a fabricated entry.
+    """
+    cache_key = f"edgar:mgmt_statements:{ticker}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    cik = await get_cik(ticker)
+    if not cik:
+        return []
+
+    submissions = await _fetch_submissions(cik)
+    if not submissions:
+        return []
+
+    recent = submissions.get("filings", {}).get("recent", {})
+    forms = recent.get("form", [])
+    accession_numbers = recent.get("accessionNumber", [])
+    primary_documents = recent.get("primaryDocument", [])
+    report_dates = recent.get("reportDate", [])
+
+    candidates = []
+    for i, form in enumerate(forms):
+        if form in NARRATIVE_FORMS:
+            candidates.append({
+                "form": form,
+                "accession_number": accession_numbers[i],
+                "primary_document": primary_documents[i],
+                "report_date": report_dates[i],
+            })
+        if len(candidates) >= limit:
+            break
+
+    statements = []
+    headers = {"User-Agent": settings.SEC_EDGAR_USER_AGENT}
+    async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT_SECONDS) as client:
+        for c in candidates:
+            accession_no_dashes = c["accession_number"].replace("-", "")
+            doc_url = (
+                f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/"
+                f"{accession_no_dashes}/{c['primary_document']}"
+            )
+            try:
+                resp = await client.get(doc_url, headers=headers)
+                resp.raise_for_status()
+            except httpx.HTTPError as e:
+                logger.warning(f"SEC EDGAR filing doc fetch failed for {ticker} {c['form']}: {e}")
+                continue
+
+            excerpt = extract_mdna(resp.text)
+            if excerpt is None:
+                continue
+
+            statements.append({
+                "period": c["report_date"],
+                "text": excerpt,
+                "source": f"SEC {c['form']} MD&A",
+            })
+
+    cache.set(cache_key, statements, ttl_seconds=604800)  # 7 days
+    return statements
 
 
 async def fetch_all_concept_histories(ticker: str) -> dict[str, list[dict]] | None:
