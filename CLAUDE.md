@@ -603,6 +603,52 @@ Amendments are explicit and dated — never silent behavioral changes inside a f
 > written from a request path is a test-pollution vector, and order-dependent failures
 > hide from single-file runs.
 
+> **Phase 61 amendment (2026-08-04):** the financial forensics were silently dead — and
+> had been for the entire recorded history of the database. Found by finally running the
+> core loop end-to-end (`backend/scripts/smoke_test.py AAPL`) rather than trusting the
+> test suite.
+>
+> **Symptom.** Every analysis returned `financial`, `cashflow`, and `earnings` as `None`
+> ("stage failed"), leaving `integrity_score` computed from only `governance` + `news` —
+> **2 of 5 modules, 27.8% of the weight vector** (the three dead modules carry
+> 0.3333 + 0.2222 + 0.1667 = **0.7222**). Confirmed against stored data: **59 of 63**
+> completed analyses have `financial_score IS NULL` and `confidence = "low"` — 23/23 in
+> June 2026, 36/36 in July, and every August run before this fix.
+>
+> **Root cause.** `yfinance==0.2.40` (pinned mid-2024) can no longer parse Yahoo's current
+> API. Raw calls fail with `AttributeError: 'str' object has no attribute 'name'` on
+> `.info`, return an empty `(0, 0)` frame for `.income_stmt`, and report **AAPL** as
+> "possibly delisted". This is a library-vs-API incompatibility, **not** the yfinance
+> rate-limiting seen in Phase 43 — there is no 429 involved. `yahoo_finance.py`'s own
+> error handling correctly converted the failure into `FINANCIAL_DATA_UNAVAILABLE`, and
+> `analysis_worker.py`'s per-stage isolation correctly degraded to `None` scores, so
+> nothing ever crashed. **The pipeline was working exactly as designed; the data source
+> underneath it was not.**
+>
+> **Fix.** `yfinance==0.2.40` → `yfinance==1.5.2`. **No code change was required** —
+> `yahoo_finance.py` works unchanged against the new major version (verified live:
+> `fetch_company_info` and `fetch_financials` both succeed, returning 5 real periods).
+> `pip check` is clean and the pinned `numpy`/`pandas` versions are unaffected.
+>
+> **Verified impact** on a real AAPL run, before → after:
+> `financial` FAILED → 100.0, `cashflow` FAILED → 100.0, `earnings` FAILED → 75.0,
+> `integrity_score` 80.3 → **90.4**, `confidence` **low → high**. Full suite: 280 passed.
+>
+> **Why no test caught this, and what that means.** Every backend test mocks yfinance —
+> correctly, since CI must stay free and offline — so no unit or integration test can
+> detect that the live data source has broken. This class of failure is only observable by
+> running the real loop. The honesty architecture (ADR-005's "absence ≠ neutral"
+> renormalization plus the confidence tier) meant the product never *lied* about it: every
+> affected analysis was correctly labelled `low` confidence. It quietly under-delivered
+> instead of silently fabricating — which is the intended failure mode, but it also meant
+> nobody noticed for months. **Treat `smoke_test.py` as a periodic obligation, not a
+> one-off**; a stored `confidence` distribution skewed to `low` is the cheapest existing
+> signal that an upstream feed has died.
+>
+> **Data note.** The 59 pre-fix analyses are not wrong, but they are *thin* — scores built
+> on governance + news only. They should be re-run before any of them is treated as a real
+> assessment.
+
 ---
 
 ## Git Commit Identity — MANDATORY
