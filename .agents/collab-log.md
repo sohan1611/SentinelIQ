@@ -36,3 +36,17 @@ no transcripts, never any secrets.
   `_last_reaped_count` and breaking `/health` serialisation later in the same session — a
   full-suite-only failure. Added an autouse fixture plus a fail-safe test. Verified: 263
   passed, no order-dependence. Accepted.
+
+## 2026-08-11 — Work order 3 (Claude → Codex)
+- Task: Phase 62 — harden `NEXT_PUBLIC_API_URL` handling after a UTF-8 BOM in the Vercel
+  env var made `fetch()` treat the API URL as relative, 404ing every call against the
+  frontend origin and surfacing only as "Request failed". Diagnosed by Claude from the
+  browser's real network log; spec embedded the exact file region since Codex cannot read
+  files in this sandbox.
+- Codex: accurate report — added pure `resolveApiBaseUrl()` + 7 tests, correctly noted it
+  could not run Vitest.
+- Review: logic correct on the first pass (BOM/zero-width/quote/trailing-slash stripping,
+  dev fallback preserved, console.error rather than a module-load throw). Claude rewrapped
+  an over-long single-line comment to house style and expanded it with the failure
+  mechanism, then verified: 135 frontend tests pass (was 128), tsc clean, production build
+  succeeds. Claude added the CLAUDE.md amendment (architect-owned). Accepted.
