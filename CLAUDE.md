@@ -649,6 +649,53 @@ Amendments are explicit and dated — never silent behavioral changes inside a f
 > on governance + news only. They should be re-run before any of them is treated as a real
 > assessment.
 
+> **Phase 62 amendment (2026-08-11):** an invisible BOM in a Vercel env var broke every
+> API call on the deployed site. Registration and login failed with the generic message
+> **"Request failed"**, and **no request ever reached the backend**.
+>
+> **Root cause.** `NEXT_PUBLIC_API_URL` in Vercel had a leading UTF-8 BOM (U+FEFF) —
+> the signature of pasting a value copied out of a UTF-8-with-BOM file (PowerShell
+> `Out-File` and Notepad both produce these). The deployed bundle contained
+> `"".concat("﻿https://sentineliq-y27m.onrender.com", "/api/v1")`. Because that
+> string does not begin with a scheme, `fetch()` treated the URL as **relative** and
+> resolved it against the frontend origin — the observed request was
+> `https://<frontend>/%EF%BB%BFhttps:/sentineliq-y27m.onrender.com/api/v1/auth/register`
+> → Vercel's HTML **404**.
+>
+> **Why the symptom was so uninformative.** `client.ts` builds its thrown message as
+> `message || response.statusText || "Request failed"`. The HTML 404 body isn't JSON, so
+> no message could be extracted; `statusText` is **always `""` on HTTP/2** (which both
+> Vercel and Render serve). Both fell through to the literal fallback. The register page
+> compounds it: it shows `err.message` for an `ApiError` but
+> `"Something went wrong. Please try again."` for a thrown network/CORS error — so the
+> exact wording was the only clue distinguishing "a real HTTP error arrived with an
+> unparseable body" from "the request never completed."
+>
+> **Fix.** `resolveApiBaseUrl()` in `frontend/lib/api/client.ts` — a pure, exported,
+> unit-tested helper that strips BOM/zero-width characters (U+FEFF, U+200B/C/D),
+> whitespace, surrounding quotes, and trailing slashes, falling back to
+> `http://localhost:8000` when empty. It is deliberately pure (the env value is passed in
+> rather than read inside) so the exact production input is testable, and it
+> `console.error`s — rather than throws — when the cleaned value still isn't absolute, since
+> a module-load throw would white-screen the entire app. Locked by
+> `frontend/lib/api/client.test.ts`, whose BOM case reproduces the production value.
+>
+> **Diagnostic lesson.** This was invisible to every static check: the value *looked*
+> correct in the Vercel dashboard, the bundle *did* contain the right hostname (my own
+> grep for `onrender.com` found it and I wrongly cleared the config), and a hand-typed
+> `fetch()` to the same URL worked perfectly. Only reading the **actual request URL** in
+> the browser's network log exposed the `%EF%BB%BF` prefix. When a frontend reports a
+> generic failure, read the real outbound request before trusting configuration.
+>
+> **Two unrelated findings surfaced during this investigation, NOT fixed here:**
+> 1. `POST /auth/register` enforces **no server-side minimum password length** — a
+>    1-character password was accepted with `200`. The 8-character rule exists only in the
+>    frontend, so it is trivially bypassed by calling the API directly.
+> 2. The `rate_limit("register", 5)` dependency **did not trigger** across 7 rapid requests
+>    from one browser. Consistent with the concern already documented in `client_ip()`:
+>    the rightmost `X-Forwarded-For` entry may vary per request behind Render/Cloudflare,
+>    scattering one caller across many buckets and making the limiter ineffective.
+
 ---
 
 ## Git Commit Identity — MANDATORY
