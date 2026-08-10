@@ -50,3 +50,17 @@ no transcripts, never any secrets.
   an over-long single-line comment to house style and expanded it with the failure
   mechanism, then verified: 135 frontend tests pass (was 128), tsc clean, production build
   succeeds. Claude added the CLAUDE.md amendment (architect-owned). Accepted.
+
+## 2026-08-11 — Work order 4 (Claude → Codex)
+- Task: Phase 63 auth hardening — server-side password policy (8 chars min, 72 bytes max
+  for bcrypt safety) in the `UserCreate` schema, and fix the rate limiter to key on
+  `CF-Connecting-IP` (Cloudflare fronts Render, confirmed from live response headers)
+  instead of the rightmost `X-Forwarded-For`, which was scattering one caller across
+  buckets so the limiter never fired.
+- Codex: accurate report — 4 files changed, 9 tests added, correctly flagged that it had
+  inferred the `rate_limit(key, limit)` signature from an excerpt rather than reading it.
+- Review: both implementations correct on the first pass. One defect: Codex left a literal
+  `*** End of File` apply_patch marker at the end of `test_rate_limit.py`, a SyntaxError
+  that broke collection for the ENTIRE suite (not just that file). Claude removed it and
+  verified: 289 backend tests pass (was 280). A reminder that Codex's inability to run
+  anything means even trivially-broken syntax reaches review — always run the suite.

@@ -696,6 +696,37 @@ Amendments are explicit and dated — never silent behavioral changes inside a f
 >    the rightmost `X-Forwarded-For` entry may vary per request behind Render/Cloudflare,
 >    scattering one caller across many buckets and making the limiter ineffective.
 
+> **Phase 63 amendment (2026-08-11):** closes the two auth defects recorded in the Phase 62
+> amendment. Both were found empirically against the **live** backend, not by inspection.
+>
+> **Server-side password policy.** `POST /auth/register` accepted a **one-character**
+> password and returned `200`, creating a real user — the 8-character rule existed only in
+> the frontend form and was bypassed by any direct API call. `UserCreate` now enforces it
+> in the schema via a Pydantic v2 `field_validator`: `MIN_PASSWORD_LENGTH = 8` and
+> `MAX_PASSWORD_BYTES = 72`. The upper bound is not cosmetic — this project calls `bcrypt`
+> directly (not passlib), and modern bcrypt **raises** on inputs over 72 bytes, so a long
+> password was an unhandled **500**; it is now a clean 422. The cap is measured in **bytes,
+> not characters**, because multi-byte UTF-8 (emoji, accents) reaches it sooner than a
+> character count suggests. Length only — no complexity rules, matching what the UI
+> promises. Validation failures flow through the existing global handler, so the route
+> body is unchanged.
+>
+> **Rate limiter now identifies the real caller.** `rate_limit("register", 5)` did **not**
+> trigger across 7 rapid requests from one browser. Root cause: `client_ip()` used the
+> rightmost `X-Forwarded-For` entry, which is not stable per client on this deployment.
+> Confirmed live that **Cloudflare fronts Render** (`Server: cloudflare`, `CF-RAY`,
+> `cf-cache-status`, alongside Render's `rndr-id`), so the resolution order is now
+> **`CF-Connecting-IP` → `True-Client-IP` → rightmost `X-Forwarded-For` → peer address**.
+> Cloudflare sets and *overwrites* `CF-Connecting-IP` on every request, so it is both
+> stable per client and un-spoofable — unlike the leftmost XFF entry, which remains
+> untrusted for the reasons H-2 already documented. Present-but-empty headers fall through
+> to the next source, and the existing log line now records which source was used.
+>
+> Locked by a regression test asserting that two requests with the **same**
+> `CF-Connecting-IP` but **different** `X-Forwarded-For` values share one bucket — the
+> exact production failure, where a single caller was scattered across buckets and never
+> limited. Backend suite: 289 passed.
+
 ---
 
 ## Git Commit Identity — MANDATORY
