@@ -146,3 +146,107 @@ async def test_touching_an_existing_bucket_protects_it_from_eviction(monkeypatch
     assert ("10.2.2.2", "rl_lru") not in keys
     assert ("10.2.2.1", "rl_lru") in keys
     assert ("10.2.2.3", "rl_lru") in keys
+
+
+import pytest
+from fastapi import HTTPException
+from starlette.requests import Request
+
+from app.api.middleware.rate_limit import client_ip, rate_limit
+
+
+def _phase63_request(headers: dict[str, str]) -> Request:
+    return Request(
+        {
+            "type": "http",
+            "asgi": {"version": "3.0"},
+            "http_version": "1.1",
+            "method": "POST",
+            "scheme": "https",
+            "path": "/phase-63-rate-limit",
+            "raw_path": b"/phase-63-rate-limit",
+            "query_string": b"",
+            "headers": [
+                (name.lower().encode("latin-1"), value.encode("latin-1"))
+                for name, value in headers.items()
+            ],
+            "client": ("127.0.0.1", 12345),
+            "server": ("testserver", 443),
+        }
+    )
+
+
+def test_client_ip_cf_connecting_ip_wins_over_x_forwarded_for():
+    request = _phase63_request(
+        {
+            "CF-Connecting-IP": " 203.0.113.10 ",
+            "X-Forwarded-For": "198.51.100.1, 192.0.2.1",
+        }
+    )
+
+    assert client_ip(request) == "203.0.113.10"
+
+
+def test_client_ip_uses_true_client_ip_before_x_forwarded_for():
+    request = _phase63_request(
+        {
+            "True-Client-IP": " 203.0.113.11 ",
+            "X-Forwarded-For": "198.51.100.2, 192.0.2.2",
+        }
+    )
+
+    assert client_ip(request) == "203.0.113.11"
+
+
+def test_client_ip_falls_back_to_rightmost_x_forwarded_for_entry():
+    request = _phase63_request(
+        {"X-Forwarded-For": "198.51.100.3, 192.0.2.3"}
+    )
+
+    assert client_ip(request) == "192.0.2.3"
+
+
+def test_client_ip_ignores_empty_cf_connecting_ip():
+    request = _phase63_request(
+        {
+            "CF-Connecting-IP": "   ",
+            "True-Client-IP": " 203.0.113.12 ",
+            "X-Forwarded-For": "198.51.100.4, 192.0.2.4",
+        }
+    )
+
+    assert client_ip(request) == "203.0.113.12"
+
+
+async def test_rate_limit_uses_cf_connecting_ip_for_a_shared_bucket():
+    limiter = rate_limit("phase-63-cf-connecting-ip", 2)
+    cf_connecting_ip = "198.18.63.63"
+
+    await limiter(
+        _phase63_request(
+            {
+                "CF-Connecting-IP": cf_connecting_ip,
+                "X-Forwarded-For": "198.51.100.5, 192.0.2.5",
+            }
+        )
+    )
+    await limiter(
+        _phase63_request(
+            {
+                "CF-Connecting-IP": cf_connecting_ip,
+                "X-Forwarded-For": "198.51.100.6, 192.0.2.6",
+            }
+        )
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await limiter(
+            _phase63_request(
+                {
+                    "CF-Connecting-IP": cf_connecting_ip,
+                    "X-Forwarded-For": "198.51.100.7, 192.0.2.7",
+                }
+            )
+        )
+
+    assert exc_info.value.status_code == 429

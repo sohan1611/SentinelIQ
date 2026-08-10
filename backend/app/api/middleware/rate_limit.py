@@ -26,33 +26,55 @@ _windows: "OrderedDict[tuple[str, str], list[float]]" = OrderedDict()
 
 
 def client_ip(request: Request) -> str:
-    """Returns the bucket key used for rate limiting -- must not be an
-    attacker-controlled value (H-2).
+    """Returns the trusted client bucket key used for rate limiting (H-2).
 
-    X-Forwarded-For's leftmost entry is whatever the original client
-    claimed -- on Render (Client -> Cloudflare -> Render's load balancer ->
-    this app), only entries appended by our OWN trusted infrastructure are
-    reliable, and each proxy hop appends to the RIGHT. An attacker can put
-    any fake value(s) at the left; they cannot control what's appended
-    after their request leaves their own machine. Taking the rightmost
-    entry is the standard fix for this class of bug regardless of the
-    exact trusted-hop count.
+    Resolution order is CF-Connecting-IP, True-Client-IP, the rightmost
+    X-Forwarded-For entry, then the peer address. Cloudflare overwrites
+    ``CF-Connecting-IP`` on every request, so it is stable per client and
+    cannot be spoofed by callers; it is therefore the preferred key for this
+    deployment. ``True-Client-IP`` is the equivalent Cloudflare header on
+    some plans. Seven rapid requests from one caller against a limit of five
+    previously produced no 429 because the rightmost X-Forwarded-For entry
+    did not identify that caller consistently, so XFF is now a fallback.
 
-    Logged at INFO (not just debug) so the raw header is visible in
-    Render's live log stream -- the exact hop shape Render forwards isn't
-    fully verifiable without live traffic (confirmed inconsistent/disputed
-    even in Render's own community), so this is the follow-up empirical
-    check: the rightmost entry must vary across distinct real users, not
-    sit constant (which would silently make rate limiting useless in the
-    opposite direction by bucketing everyone together).
+    X-Forwarded-For's leftmost entry is whatever the original client claimed.
+    An attacker can put any fake value(s) at the left, so it must never be
+    trusted. Only entries appended by trusted infrastructure are reliable;
+    each proxy hop appends to the right, which is why the rightmost entry is
+    retained as the non-Cloudflare fallback.
     """
     xff = request.headers.get("x-forwarded-for")
+
+    for header, source in (
+        ("cf-connecting-ip", "cf-connecting-ip"),
+        ("true-client-ip", "true-client-ip"),
+    ):
+        value = request.headers.get(header)
+        if value:
+            ip = value.strip()
+            if ip:
+                logger.info(
+                    "rate_limit client_ip resolved",
+                    extra={"xff_raw": xff, "resolved_ip": ip, "source": source},
+                )
+                return ip
+
     if xff:
         entries = [e.strip() for e in xff.split(",") if e.strip()]
-        ip = entries[-1] if entries else (request.client.host if request.client else "unknown")
-        logger.info("rate_limit client_ip resolved", extra={"xff_raw": xff, "resolved_ip": ip})
-        return ip
-    return request.client.host if request.client else "unknown"
+        if entries:
+            ip = entries[-1]
+            logger.info(
+                "rate_limit client_ip resolved",
+                extra={"xff_raw": xff, "resolved_ip": ip, "source": "x-forwarded-for"},
+            )
+            return ip
+
+    ip = request.client.host.strip() if request.client and request.client.host else "unknown"
+    logger.info(
+        "rate_limit client_ip resolved",
+        extra={"xff_raw": xff, "resolved_ip": ip, "source": "peer"},
+    )
+    return ip
 
 
 def rate_limit(key: str, limit: int, window_secs: int = _WINDOW_SECS) -> Callable:
