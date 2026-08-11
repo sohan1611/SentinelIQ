@@ -124,3 +124,20 @@ no transcripts, never any secrets.
   name it had not been shown). Fixed the assertion; production code needed no change.
   Verified live: KO went from a hard 404 to 5 periods with four full years of real data.
   308 backend tests pass (was 304). Accepted.
+
+## 2026-08-11 — Work order 9 (Claude → Codex)
+- Task: Phase 68 — a data-layer coverage sweep across varied tickers, to catch the class of
+  silent degradation behind Phases 61/64/67. Hard constraint: no Gemini, no DB writes, no
+  free-tier quota — every bug in that class lived in the data layer, so probing it alone
+  catches them for free. Three new files only.
+- Codex: accurate report, clean first pass — pure classifier + async probe + script + 8
+  tests, no existing file touched.
+- Codex raised a REAL ambiguity in the spec rather than silently choosing: the degraded
+  rules I wrote said "fewer than 2 MD&A statements", but test (g) required an issue when 3
+  statements share ONE period. It classified that as `degraded` while still predicting
+  `edgar_mdna` as the source (correct — the pipeline WOULD use EDGAR with 3 statements).
+  Good architectural judgement; accepted as-is.
+- Review: verified by Opus — 316 backend tests pass (was 308), scope was exactly 3 new
+  files, and grep confirms no Gemini/DB imports leaked in. First live sweep: AAPL/KO/MSFT/
+  JPM/CROX all `ok`, TM correctly `degraded` (20-F filer, no 10-K/10-Q MD&A). KO reporting
+  `ok` independently confirms Phase 67's fix. Accepted with no corrections.
