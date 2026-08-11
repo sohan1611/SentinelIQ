@@ -84,6 +84,14 @@ class ConsistencyEngine:
             prev = snapshots[i - 1]
             curr = snapshots[i]
 
+            # This module measures whether a company's story changes over time, so two
+            # statements from the same period cannot contradict each other chronologically.
+            # Before this guard, same-day headlines produced the literal
+            # "tone shift between 2026-08-10 and 2026-08-10" and a 15/100
+            # SEVERE RISK card on the live site.
+            if prev["period"] == curr["period"]:
+                continue
+
             diff = abs(curr["sentiment_score"] - prev["sentiment_score"])
             contradiction_scores.append(diff)
 

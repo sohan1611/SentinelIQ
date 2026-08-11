@@ -64,3 +64,15 @@ no transcripts, never any secrets.
   that broke collection for the ENTIRE suite (not just that file). Claude removed it and
   verified: 289 backend tests pass (was 280). A reminder that Codex's inability to run
   anything means even trivially-broken syntax reaches review — always run the suite.
+
+## 2026-08-11 — Work order 5 (Claude → Codex)
+- Task: Phase 64 — two live-found bugs. (a) `ConsistencyEngine` compared same-period
+  snapshots, printing "tone shift between 2026-08-10 and 2026-08-10" and a 15/100 SEVERE
+  RISK card; (b) `useAnalysisHistory` keyed its effect on `[ticker]` only, so the trend
+  chart omitted the analysis just run until a manual reload.
+- Codex: accurate report, clean first pass — 3 files changed exactly as scoped plus the
+  requested test file, and it correctly noted it could not run the suite. No stray patch
+  markers this time.
+- Review: verified by Opus — backend 291 passed (was 289), frontend 135 passed, tsc clean,
+  production build succeeds. Scope was exactly the 3 named files + 1 new test. Accepted
+  with no corrections.

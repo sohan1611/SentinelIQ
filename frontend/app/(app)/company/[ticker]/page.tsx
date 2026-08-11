@@ -75,7 +75,7 @@ export default function CompanyOverviewPage({ params }: { params: Promise<{ tick
 
   const { company, analysis, isLoading, error, analysisStatus, isRunning, analysisError, startAnalysis: start } = useCompanyContext();
   const { isAdding, add: handleAddToWatchlist } = useAddToWatchlist(ticker);
-  const { history, isLoading: isHistoryLoading } = useAnalysisHistory(ticker);
+  const { history, isLoading: isHistoryLoading } = useAnalysisHistory(ticker, analysis?.id ?? null);
 
   const isLoaded = !isLoading;
   const { styles: moduleStyles, showSkeletons, skeletonStyle } = useStaggeredReveal(4, 40, isLoaded);

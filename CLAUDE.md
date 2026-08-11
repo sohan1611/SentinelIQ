@@ -727,6 +727,36 @@ Amendments are explicit and dated — never silent behavioral changes inside a f
 > exact production failure, where a single caller was scattered across buckets and never
 > limited. Backend suite: 289 passed.
 
+> **Phase 64 amendment (2026-08-11):** two live-visible defects, both found by driving the
+> deployed app in a browser and cross-checking the production database — not by reading
+> code or running tests.
+>
+> **The narrative module compared a date with itself.** The live Narrative tab printed
+> *"Significant tone shift between 2026-08-10 and 2026-08-10 (Score diff: 0.85)"* and a
+> red **15/100 SEVERE RISK** card. `ConsistencyEngine.analyze` sorted snapshots by `period`
+> and compared every consecutive pair without checking the periods actually differed — so
+> two journalists' same-day headlines registered as a management narrative contradiction.
+> The loop now skips same-period pairs; when every pair is same-period the existing
+> `if not contradiction_scores` path returns the neutral `50.0` instead of a fabricated
+> severe score. Thresholds, the score formula, and the grounding gate are unchanged.
+> This is a display-only correction — narrative remains zero-weighted (ADR-006), so no
+> Integrity Score changes.
+>
+> **The trend chart silently omitted the analysis you just ran.** Confirmed live: with the
+> database already holding a `2026-08-11` run, the chart's newest point was `2026-08-09`;
+> a manual reload made it appear. `useAnalysisHistory` fetched inside a `useEffect` keyed
+> only on `[ticker]`, and completing an analysis does not change the ticker. The hook now
+> takes an optional `refreshKey` (the Overview page passes `analysis?.id`), so a
+> newly-completed analysis — which has a new id — retriggers the fetch.
+>
+> **The pattern worth internalising.** Phases 61, 62 and 64 were all found the same way:
+> by exercising the real product, never by the test suite. The suite mocks every external
+> and every one of these bugs lived precisely in what mocks replace — a dead upstream feed,
+> an env var, and real-world data shape (headlines clustering on one day). **Static green
+> is not evidence the product works.** The cheapest standing signal remains the stored
+> `confidence` distribution: a run of `low` means an upstream module is silently returning
+> `None`.
+
 ---
 
 ## Git Commit Identity — MANDATORY

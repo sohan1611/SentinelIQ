@@ -7,10 +7,12 @@ interface UseAnalysisHistoryResult {
   isLoading: boolean;
 }
 
-export function useAnalysisHistory(ticker: string): UseAnalysisHistoryResult {
+export function useAnalysisHistory(ticker: string, refreshKey?: string | null): UseAnalysisHistoryResult {
   const [history, setHistory] = useState<AnalysisHistoryItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
+  // A new completed-analysis ID must refresh this hook: ticker-only dependencies previously
+  // left the chart rendering pre-analysis data until a manual page reload, as confirmed live.
   useEffect(() => {
     if (!ticker) return
     let cancelled = false
@@ -31,7 +33,7 @@ export function useAnalysisHistory(ticker: string): UseAnalysisHistoryResult {
     return () => {
       cancelled = true
     }
-  }, [ticker])
+  }, [ticker, refreshKey])
 
   return { history, isLoading }
 }
