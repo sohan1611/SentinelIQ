@@ -120,6 +120,7 @@ export interface ModuleDetails {
   narrative?: {
     snapshots?: NarrativeSnapshotData[];
     tone_shifts?: ToneShift[];
+    source?: "edgar_mdna" | "news_headlines" | "none";
   };
   governance?: {
     provenance?: GovernanceProvenance;

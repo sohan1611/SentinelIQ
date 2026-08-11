@@ -209,6 +209,7 @@ def fake_session(company, analysis):
 @pytest.fixture(autouse=True)
 def patch_session(monkeypatch, fake_session):
     monkeypatch.setattr(analysis_worker, "AsyncSessionLocal", lambda: FakeSessionCtx(fake_session))
+    monkeypatch.setattr(analysis_worker, "fetch_management_statements", AsyncMock(return_value=[]))
 
 
 async def test_happy_path_completes_with_full_module_details(monkeypatch, company, analysis, fake_session):

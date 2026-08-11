@@ -796,6 +796,50 @@ Amendments are explicit and dated — never silent behavioral changes inside a f
 > `module_failures` of 3/3/3 against 0 for `governance`/`news` — pinpointing *which* feed
 > died, not merely that something is wrong. Backend suite: 299 passed.
 
+> **Phase 66 amendment (2026-08-11):** the narrative module now reads **management's own
+> words** instead of press coverage. It was the last dishonest signal in the product: it is
+> meant to detect whether a company's own story changes over time, but it consumed Google
+> News headlines — journalists' mood, not corporate narrative. Live consequence, observed
+> on the deployed site: with two headlines published the same day it printed
+> *"Significant tone shift between 2026-08-10 and 2026-08-10"* and a red 15/100 SEVERE RISK
+> card. Phase 64 stopped same-period pairs from counting; this phase fixes the input.
+>
+> `_stage_narrative` now tries `sec_edgar.fetch_management_statements()` — the free,
+> keyless 10-K/10-Q **MD&A** extractor built and left unwired in Phase 58 — taking
+> `NARRATIVE_EDGAR_FILING_LIMIT` (3) recent filings. Quarterly filings carry genuinely
+> distinct `reportDate`s, so the comparison is finally temporal. Verified live: AAPL and KO
+> each return 3 statements across **3 distinct quarters**.
+>
+> **News headlines remain a real fallback**, not a formality: EDGAR has no coverage for
+> foreign private issuers (20-F filers) or non-XBRL filers. The EDGAR call sits in its own
+> `try/except` so an EDGAR outage degrades to news rather than failing the stage; if both
+> sources yield <2 statements the pre-existing neutral `50.0` behaviour is unchanged.
+>
+> **Cost control.** `ConsistencyEngine` makes one Gemini call *per statement*, and MD&A
+> excerpts run to thousands of characters against a ~100-character headline.
+> `NARRATIVE_MAX_STATEMENT_CHARS` (4000) truncates each statement at the call site, where
+> the cost decision is visible, and *before* the engine — so each `source_quote` is grounded
+> against exactly the text the model saw. Truncation builds **new** dicts rather than
+> mutating the service's return value, because `fetch_management_statements` caches for 7
+> days and in-place mutation would poison every later read.
+>
+> **Honesty.** `module_details.narrative.source` records which source was actually used
+> (`"edgar_mdna"` / `"news_headlines"` / `"none"`), defaulted so pre-existing rows still
+> validate. The Narrative tab reads it and adapts its heading and description — it would
+> otherwise keep telling users the score is "derived from recent headlines" while showing
+> MD&A analysis, which is exactly the kind of quiet overclaim this project exists to avoid.
+>
+> **Narrative remains ZERO-WEIGHTED.** `BASE_WEIGHTS` is untouched. ADR-006 step 2 requires
+> the signal to be validated on real output before any weight is restored, and that is the
+> owner's call — this phase makes the module honest, not weighted. Backend 304 passed
+> (was 299); frontend 135 passed, tsc clean, build succeeds.
+>
+> **Known limitation carried forward from Phase 58:** MD&A extraction is heuristic. KO's
+> excerpts came back at 377–640 characters versus AAPL's full 8000, because the
+> "last occurrence of the heading" rule can start mid-section. Robust extraction needs the
+> filing's DOM heading structure, not flattened text. Worth revisiting before narrative is
+> ever re-weighted.
+
 ---
 
 ## Git Commit Identity — MANDATORY
