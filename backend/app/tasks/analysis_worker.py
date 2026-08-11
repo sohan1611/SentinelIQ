@@ -22,7 +22,7 @@ from app.models.watchlist_alert import WatchlistAlert
 
 from app.services.yahoo_finance import fetch_financials
 from app.services.news_aggregator import fetch_news_sentiment, fetch_news_text, fetch_news_statements
-from app.services.sec_edgar import fetch_all_concept_histories
+from app.services.sec_edgar import fetch_all_concept_histories, fetch_management_statements
 from app.services.pipeline_health import record_analysis_outcome
 from app.core.forensics.forensics_runner import ForensicsRunner
 from app.core.forensics.restatement_detector import detect_restatements
@@ -35,6 +35,14 @@ from app.logging_config import CorrelationLoggerAdapter
 from app.schemas.analysis import ModuleDetails, CURRENT_SCHEMA_VERSION
 
 logger = logging.getLogger(__name__)
+
+# Three recent 10-K/10-Q filings give three distinct quarters while bounding
+# this narrative analysis to three Gemini calls.
+NARRATIVE_EDGAR_FILING_LIMIT = 3
+# MD&A excerpts are thousands of characters rather than ~100-character
+# headlines, and each statement incurs one Gemini call. Truncate at this
+# visible cost decision before the engine so source_quote grounding is correct.
+NARRATIVE_MAX_STATEMENT_CHARS = 4000
 
 
 async def update_status(session: AsyncSession, analysis_id: UUID, stage: str):
@@ -64,6 +72,7 @@ class StageContext:
     narrative_snapshot_data: list = field(default_factory=list)
     narrative_provenance: list = field(default_factory=list)
     narrative_tone_shifts: list = field(default_factory=list)
+    narrative_source: str = "none"
     governance_provenance: dict = field(default_factory=dict)
     governance_flags: list = field(default_factory=list)
     financial_data_status: str = "ok"
@@ -255,11 +264,33 @@ async def _stage_governance(ctx: StageContext):
 
 async def _stage_narrative(ctx: StageContext):
     try:
-        statements = await fetch_news_statements(ctx.company.name, ctx.company.ticker, limit=2)
+        try:
+            statements = await fetch_management_statements(
+                ctx.company.ticker, limit=NARRATIVE_EDGAR_FILING_LIMIT
+            )
+        except Exception as e:
+            ctx.log.warning(
+                f"EDGAR management statement fetch failed: {e}",
+                extra={"stage": "narrative"},
+            )
+            statements = []
+
+        if len(statements) >= 2:
+            narrative_source = "edgar_mdna"
+        else:
+            statements = await fetch_news_statements(ctx.company.name, ctx.company.ticker, limit=2)
+            narrative_source = "news_headlines"
+
         if len(statements) < 2:
+            ctx.narrative_source = "none"
             ctx.scores["narrative"] = 50.0
             return
 
+        statements = [
+            {**statement, "text": statement["text"][:NARRATIVE_MAX_STATEMENT_CHARS]}
+            for statement in statements
+        ]
+        ctx.narrative_source = narrative_source
         narrative_score, snaps, cont_flags, provenance = await ConsistencyEngine().analyze(
             ctx.company.name, statements
         )
@@ -337,6 +368,7 @@ async def _stage_score_persist(ctx: StageContext):
                 "statements_used": len(ctx.narrative_snapshot_data),
                 "provenance": ctx.narrative_provenance,
                 "tone_shifts": ctx.narrative_tone_shifts,
+                "source": ctx.narrative_source,
             },
             "governance": {
                 "provenance": ctx.governance_provenance,

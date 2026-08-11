@@ -72,16 +72,19 @@ export default function NarrativePage({ params }: { params: Promise<{ ticker: st
 
   const snapshots = analysis.module_details?.narrative?.snapshots ?? [];
   const toneShifts = analysis.module_details?.narrative?.tone_shifts ?? [];
+  const narrativeSource = analysis.module_details?.narrative?.source ?? "news_headlines";
+  const isMdna = narrativeSource === "edgar_mdna";
+  const itemNoun = isMdna ? "management filings" : "recent headlines";
 
   let summary: string;
   if (snapshots.length === 0) {
-    summary = "Not enough recent news coverage was available to assess tone consistency.";
+    summary = "Not enough source material was available to assess narrative consistency.";
   } else if (snapshots.length === 1) {
-    summary = "Only one recent news item was available — not enough to compare tone across periods.";
+    summary = "Only one statement was available — not enough to compare tone across periods.";
   } else if (toneShifts.length > 0) {
-    summary = `${toneShifts.length} tone shift${toneShifts.length === 1 ? "" : "s"} detected across ${snapshots.length} recent headlines.`;
+    summary = `${toneShifts.length} tone shift${toneShifts.length === 1 ? "" : "s"} detected across ${snapshots.length} ${itemNoun}.`;
   } else {
-    summary = `Tone is consistent across ${snapshots.length} recent headlines — no significant shifts detected.`;
+    summary = `Tone is consistent across ${snapshots.length} ${itemNoun} — no significant shifts detected.`;
   }
 
   const pairs = snapshots.slice(0, -1).map((prev, i) => {
@@ -97,7 +100,7 @@ export default function NarrativePage({ params }: { params: Promise<{ ticker: st
       <section>
         <div className="flex items-center gap-3 mb-3">
           <h2 className="font-sans text-[10px] font-medium uppercase tracking-[0.08em] text-[#7A786F]">
-            NEWS TONE (EXPERIMENTAL)
+            {isMdna ? "MANAGEMENT NARRATIVE (EXPERIMENTAL)" : "NEWS TONE (EXPERIMENTAL)"}
           </h2>
           <ModuleScoreBadge score={analysis.narrative_score} />
         </div>
@@ -105,7 +108,9 @@ export default function NarrativePage({ params }: { params: Promise<{ ticker: st
           {summary}
         </p>
         <p className="font-sans text-[12px] text-[#B0ADA7]">
-          News Tone is derived from recent headlines, shown for reference, and does not affect the Corporate Integrity Score.
+          {isMdna
+            ? "Derived from management's own discussion in recent SEC 10-K/10-Q filings, shown for reference, and does not affect the Corporate Integrity Score."
+            : "News Tone is derived from recent headlines, shown for reference, and does not affect the Corporate Integrity Score."}
         </p>
       </section>
 

@@ -98,6 +98,11 @@ class NarrativeModuleDetails(BaseModel):
     statements_used: int = 0
     provenance: List[Dict[str, Any]] = []
     tone_shifts: List[Dict[str, Any]] = []
+    # "edgar_mdna" = management's own MD&A from SEC 10-K/10-Q filings;
+    # "news_headlines" = the press-coverage fallback; "none" = too little data to compare.
+    # The default preserves backward compatibility with rows written before this phase,
+    # which were all news-derived.
+    source: str = "news_headlines"
 
 
 class GovernanceModuleDetails(BaseModel):

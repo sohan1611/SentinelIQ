@@ -91,3 +91,23 @@ no transcripts, never any secrets.
   never-change-the-status-code reasoning. Verified `/health` still registers 0 dependencies,
   and replayed the real outage: 3 analyses missing financial/cashflow/earnings produce
   `signal_degraded: true` with per-module failure counts. Accepted.
+
+## 2026-08-11 — Work order 7 (Claude → Codex)
+- Task: Phase 66 — wire Phase 58's EDGAR MD&A extractor into the narrative module so it
+  reads management's own filings instead of news headlines, with a news fallback, source
+  recorded in `module_details`, and source-aware UI labels. Narrative stays zero-weighted.
+- Codex round 1: completed only the two regions it had exact content for (schema + the
+  narrative page) and **declined to guess** at the worker import/constants/StageContext and
+  the frontend type, saying so explicitly. Correct judgement — guessing would have left a
+  non-runnable worker.
+- Claude: supplied the six missing regions verbatim. (`codex exec resume` refused `-C/-s/-m`
+  and then failed with "direct app-server input is not allowed for multi-agent v2
+  sub-agents", so the follow-up ran as a fresh `codex exec` — the spec was self-contained.)
+- Codex round 2: completed the worker wiring, the type, and 5 tests, and proactively mocked
+  the new EDGAR boundary in `test_analysis_pipeline.py` so existing integration tests stay
+  network-free — a good call nobody asked for.
+- Review: verified by Opus — backend 304 passed (was 299), frontend 135, tsc clean, build
+  succeeds. The integration-test edit is a single additive mock line, no assertions
+  weakened. Truncation confirmed to copy rather than mutate the 7-day-cached objects.
+  Validated against live EDGAR: AAPL and KO each yield 3 statements across 3 distinct
+  quarters. Accepted with no corrections.
