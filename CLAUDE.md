@@ -840,6 +840,61 @@ Amendments are explicit and dated — never silent behavioral changes inside a f
 > filing's DOM heading structure, not flattened text. Worth revisiting before narrative is
 > ever re-weighted.
 
+> **Phase 67 amendment (2026-08-11):** ragged statement periods silently destroyed a
+> company's entire financial dataset. Found while verifying Phase 66 on a second ticker —
+> KO's fresh analysis came back with `financial`, `cashflow` and `earnings` all `None` and
+> `confidence = "low"`, scoring 79.9 on `governance` + `news` alone.
+>
+> **Not a yfinance outage this time.** `fetch_financials("KO")` raised
+> `404 No financial data available` while raw yfinance returned a perfectly valid income
+> statement (shape `(59, 5)`, not empty). Our own code was rejecting data that was there.
+>
+> **Root cause.** `fetch_financials` builds its period list as the **union** of the column
+> sets of the three statements, then indexes EVERY statement by EVERY period in that union.
+> Yahoo returns ragged sheets: KO's cash-flow statement has 4 periods while its income
+> statement and balance sheet have 5 (it lacks `2021-12-31`). `cf.loc["Operating Cash
+> Flow", 2021-12-31]` therefore raised `KeyError`, which fell through to the broad
+> `except Exception`, matched no rate-limit keyword, and became a generic 404 — discarding
+> every period, including the four that were completely intact.
+>
+> ```
+> ticker  income  balance  cashflow      result
+> AAPL      5       5        5           works  (uniform by luck)
+> KO        5       5        4           404    (entire history discarded)
+> ```
+>
+> **Impact.** Any company whose three statements do not share an identical set of period
+> columns lost `financial` + `cashflow` + `earnings` — **0.7222 of the weight vector**.
+> AAPL only ever worked because its sheets happen to be uniform, which is precisely why
+> single-ticker verification missed it.
+>
+> **Fix.** `get_val` now returns `None` when the requested period is absent from that
+> particular statement, instead of raising. The union is deliberately KEPT: a period covered
+> by the income statement and balance sheet still yields real revenue, net income, assets
+> and receivables even when the cash-flow sheet omits it, and a field the source does not
+> cover is simply absent — ADR-005's "absence ≠ neutral" rule. Verified live: KO now
+> returns 5 periods with four full years of real data (2022–2025), where it previously
+> returned nothing at all.
+>
+> **Second fix — stop swallowing the diagnosis.** This bug was invisible for as long as it
+> existed because the real exception was discarded and replaced by a bare 404.
+> `fetch_financials` now logs the ticker, exception class and message before falling back to
+> 404, so the next failure of this kind is readable in Render's log stream instead of
+> looking like "this ticker has no data". Status codes and `detail` strings are unchanged.
+>
+> **The lesson, again.** This is the third instance of the same shape (Phases 61, 64, 67):
+> the data layer fails, per-stage isolation degrades the modules to `None`, renormalization
+> honestly re-weights the survivors, and the product keeps publishing a low-confidence score
+> built on a fraction of its evidence. Phase 65's monitor now catches this class in
+> production — and note that verifying on **one** ticker is not verification: AAPL passed
+> every check while KO was completely broken. Backend suite: 308 passed (was 304), with a
+> regression fixture reproducing KO's real ragged shape.
+>
+> **Observed, not fixed:** both AAPL and KO return a trailing period whose fields are all
+> `None` (Yahoo emits a mostly-NaN oldest column). It contributes nothing to scoring but
+> does inflate `period_count`, which feeds the confidence tier's `period_count >= 3` test.
+> Pre-existing and low impact; worth tidying in a future pass.
+
 ---
 
 ## Git Commit Identity — MANDATORY
