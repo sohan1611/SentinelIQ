@@ -23,6 +23,7 @@ from app.models.watchlist_alert import WatchlistAlert
 from app.services.yahoo_finance import fetch_financials
 from app.services.news_aggregator import fetch_news_sentiment, fetch_news_text, fetch_news_statements
 from app.services.sec_edgar import fetch_all_concept_histories
+from app.services.pipeline_health import record_analysis_outcome
 from app.core.forensics.forensics_runner import ForensicsRunner
 from app.core.forensics.restatement_detector import detect_restatements
 from app.core.forensics.as_filed_adapter import build_as_filed_periods
@@ -355,6 +356,13 @@ async def _stage_score_persist(ctx: StageContext):
             },
         }).model_dump()
         await ctx.session.commit()
+
+        # Observability only (Phase 65) -- never allowed to affect an analysis that has
+        # already been computed and committed, hence its own try/except.
+        try:
+            record_analysis_outcome(ctx.scores, confidence)
+        except Exception:
+            ctx.log.warning("pipeline health record failed", extra={"stage": "score_persist"})
     except Exception as e:
         ctx.log.error(f"Stage score_persist failed: {e}", extra={"stage": "score_persist"})
         await ctx.session.rollback()

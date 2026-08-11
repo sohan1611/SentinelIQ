@@ -757,6 +757,45 @@ Amendments are explicit and dated — never silent behavioral changes inside a f
 > `confidence` distribution: a run of `low` means an upstream module is silently returning
 > `None`.
 
+> **Phase 65 amendment (2026-08-11):** signal-integrity monitoring — makes a silently
+> degrading pipeline observable. This is the architectural answer to Phase 61: the three
+> financial forensic modules were dead for **two months** (59 of 63 stored analyses had
+> `financial_score IS NULL` and `confidence = "low"`) while the product kept publishing
+> scores about real, named companies, and **nothing surfaced it**.
+>
+> **Why nothing caught it.** Every backend test mocks the external feeds — correctly, since
+> CI must stay free and offline — so no test *can* detect that a live source has died. The
+> pipeline's own resilience then hid the damage: per-stage isolation degraded failed modules
+> to `None` and ADR-005's renormalization honestly re-weighted the survivors. The product
+> never lied; it correctly labelled every affected run `low` confidence. That signal existed
+> the whole time, unread in the database.
+>
+> **`backend/app/services/pipeline_health.py`** turns it into an observable one.
+> `record_analysis_outcome(scores, confidence)` is called from `_stage_score_persist`
+> **after** its commit succeeds, inside its own try/except so an observability bug can never
+> fail an analysis that is already computed and persisted. `get_pipeline_status()` reports,
+> over a bounded ring buffer of the last `MAX_TRACKED_ANALYSES` (50) runs:
+> `degraded_pct`, a per-module `module_failures` tally, the `confidence` distribution, and
+> `signal_degraded` — true only once `MIN_SAMPLE_FOR_DEGRADED` (3) runs have been seen and
+> `degraded_pct >= 50`, so a single post-restart failure can't raise a false alarm.
+>
+> Only the five `BASE_WEIGHTS` modules count; **`narrative` is excluded** because it is
+> zero-weighted (ADR-006), so its absence is not a signal outage. A module is "missing" only
+> when absent or `None` — a real computed `50.0` is not missing, per ADR-005's
+> "absence ≠ neutral".
+>
+> **Deliberately in-process and database-free**, surfaced on the already-polled `/health`.
+> Querying the DB here would keep Neon's free-tier compute from ever idling — the exact
+> failure Phase 59 fixed — so this adds no query, no loop, and no timer. Like the `reaper`
+> field, `pipeline` **never** changes `/health`'s status code: conflating a dead data feed
+> with "the API is down" would recreate the Phase 30 false-alarm outage. State resets on
+> restart, an accepted trade (the reaper status and rate limiter already work this way).
+>
+> **Verified by replaying the real outage**: recording three analyses with
+> `financial`/`cashflow`/`earnings` `None` yields `signal_degraded: true` and
+> `module_failures` of 3/3/3 against 0 for `governance`/`news` — pinpointing *which* feed
+> died, not merely that something is wrong. Backend suite: 299 passed.
+
 ---
 
 ## Git Commit Identity — MANDATORY

@@ -76,3 +76,18 @@ no transcripts, never any secrets.
 - Review: verified by Opus — backend 291 passed (was 289), frontend 135 passed, tsc clean,
   production build succeeds. Scope was exactly the 3 named files + 1 new test. Accepted
   with no corrections.
+
+## 2026-08-11 — Work order 6 (Claude → Codex)
+- Task: Phase 65 — signal-integrity monitoring. New in-process, DB-free
+  `pipeline_health.py` recording per-analysis module failures + confidence, surfaced on the
+  already-polled `/health`, so a dead upstream feed can never again go unnoticed for
+  months. Hard constraint in the spec: no DB query, no loop, no timer (Neon budget).
+- Codex: accurate report — 4 files, 8 tests. Honestly flagged that it could NOT extend the
+  `/health` docstring or place the new import in the existing import group, because the
+  spec had not supplied those exact regions. Good judgement: it declined to guess.
+- Review: implementation correct; 299 backend tests pass (was 291). Claude finished the two
+  items Codex correctly declined — moved the import from mid-file (line 302) into the
+  top-level `app.services` group, and extended the `/health` docstring with the DB-free and
+  never-change-the-status-code reasoning. Verified `/health` still registers 0 dependencies,
+  and replayed the real outage: 3 analyses missing financial/cashflow/earnings produce
+  `signal_degraded: true` with per-module failure counts. Accepted.
