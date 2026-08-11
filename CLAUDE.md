@@ -895,6 +895,44 @@ Amendments are explicit and dated — never silent behavioral changes inside a f
 > does inflate `period_count`, which feeds the confidence tier's `period_count >= 3` test.
 > Pre-existing and low impact; worth tidying in a future pass.
 
+> **Phase 68 amendment (2026-08-11):** a data-layer coverage sweep — the check that would
+> have caught Phases 61, 64 and 67 before a user did.
+>
+> **Why.** Three production bugs this month shared one shape: the data layer failed,
+> per-stage isolation degraded the module to `None`, ADR-005 renormalized over the
+> survivors, and the product published an honestly-labelled `low`-confidence score built on
+> a fraction of its evidence. Nothing crashed, nothing lied, nothing was noticed. The
+> decisive lesson came from Phase 67: **AAPL passed every check all session while KO was
+> completely broken**, because AAPL's three statements happen to share identical period
+> columns and KO's do not. Verifying one ticker is not verification.
+>
+> **`backend/app/services/data_coverage.py`** holds a pure, I/O-free `classify_coverage()`
+> plus an async `probe_ticker()`; **`backend/scripts/validate_data_sources.py`** sweeps a
+> deliberately varied ticker set. It reports usable periods, per-field coverage, EDGAR XBRL
+> coverage, MD&A statement count and — the number that actually matters — MD&A *distinct*
+> periods, since Phase 64 proved statements sharing one period cannot produce a meaningful
+> over-time comparison. It also predicts which narrative source the real pipeline would
+> pick, mirroring `_stage_narrative`'s rule.
+>
+> **`usable_periods` is deliberately not `len(financials)`**: Phase 67 showed a record can
+> exist for a period yet have every core field `None` (Yahoo emits a trailing mostly-NaN
+> column), so a period only counts when it carries at least one field the forensic modules
+> actually consume.
+>
+> **Zero cost by design — this is what makes it safe to run often.** It makes **no Gemini
+> calls** and performs **no database writes**, so it consumes neither the daily AI budget
+> nor the owner's 5-analyses-per-month free-tier quota. Every bug in this class lived in the
+> data layer, not the AI layer, so probing the data sources alone catches all of it for
+> free. Deliberately NOT wired into CI, which must stay offline and free; the script exits
+> non-zero on any `failed` ticker so it can be scheduled later.
+>
+> **First live run** (AAPL, KO, MSFT, JPM, CROX, TM): five `ok`, one `degraded`.
+> **KO now reports `ok`** — independent confirmation that Phase 67's ragged-column fix
+> holds. TM (Toyota) is correctly `degraded` with 0 MD&A statements: as a 20-F foreign
+> private issuer it files no 10-K/10-Q, so narrative falls back to news headlines exactly as
+> designed — the tool distinguishes "expected gap" from "broken" rather than crying wolf.
+> Backend suite: 316 passed (was 308).
+
 ---
 
 ## Git Commit Identity — MANDATORY
