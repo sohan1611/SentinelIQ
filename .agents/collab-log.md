@@ -111,3 +111,16 @@ no transcripts, never any secrets.
   weakened. Truncation confirmed to copy rather than mutate the 7-day-cached objects.
   Validated against live EDGAR: AAPL and KO each yield 3 statements across 3 distinct
   quarters. Accepted with no corrections.
+
+## 2026-08-11 — Work order 8 (Claude → Codex)
+- Task: Phase 67 — `fetch_financials` 404'd whenever Yahoo returned ragged period columns
+  (KO's cash-flow sheet has 4 periods vs 5 in income/balance), discarding the company's
+  entire financial history and 0.7222 of the weight vector. Guard `get_val` against a
+  period missing from that statement, plus log the swallowed exception before the 404.
+- Codex: accurate report, correct production fix on the first pass, 4 tests, no blocked
+  regions.
+- Review: Claude ran the suite and caught one bad assertion — the test used
+  `accounts_receivable` where the result dict key is `accounts_recv` (Codex guessed a field
+  name it had not been shown). Fixed the assertion; production code needed no change.
+  Verified live: KO went from a hard 404 to 5 periods with four full years of real data.
+  308 backend tests pass (was 304). Accepted.

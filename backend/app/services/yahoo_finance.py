@@ -1,5 +1,8 @@
 import asyncio
+import logging
 import yfinance as yf
+
+logger = logging.getLogger(__name__)
 from fastapi import HTTPException
 from app.services import cache
 
@@ -110,6 +113,18 @@ async def fetch_financials(ticker: str) -> list[dict]:
                 period_str = str(p.year)
 
                 def get_val(df, row_names):
+                    # A period present in one statement is not guaranteed to be present in
+                    # the others: Yahoo returns ragged column sets (live example -- KO's
+                    # cash-flow sheet has 4 periods while its income statement and balance
+                    # sheet have 5). `periods` is the UNION, so indexing a statement by a
+                    # period it lacks raises KeyError, which the broad handler below turned
+                    # into a 404 that discarded the company's entire financial history and
+                    # silently killed the financial/cashflow/earnings modules (0.7222 of
+                    # the weight vector). A field the source does not cover for a period is
+                    # simply absent -- return None and let the forensic modules skip it,
+                    # per ADR-005's "absence is not neutral" rule.
+                    if p not in df.columns:
+                        return None
                     for r in row_names:
                         if r in df.index:
                             val = df.loc[r, p]
@@ -155,6 +170,10 @@ async def fetch_financials(ticker: str) -> list[dict]:
                     detail="FINANCIAL_DATA_UNAVAILABLE",
                     headers={"Retry-After": "120"},
                 )
+            logger.warning(
+                "fetch_financials falling back to 404 for %s: %s: %s",
+                ticker, type(e).__name__, e,
+            )
             raise HTTPException(status_code=404, detail="No financial data available for this ticker.")
 
     try:
