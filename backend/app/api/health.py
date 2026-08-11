@@ -5,6 +5,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.services.pipeline_health import get_pipeline_status
 from app.tasks.reaper import get_reaper_status
 
 logger = logging.getLogger(__name__)
@@ -33,8 +34,28 @@ async def health_check():
     previously visible only in stdout logs nobody watches. Deliberately does
     NOT affect this endpoint's status code: a stale reaper is a real
     degradation worth surfacing, but it is not evidence that the API is down.
+
+    The "pipeline" field (Phase 65) reports, over the last N completed
+    analyses held in memory, how many were computed with a weighted forensic
+    module missing -- the signal that would have exposed the yfinance outage
+    that left `financial`/`cashflow`/`earnings` dead for two months while the
+    product kept publishing scores. `signal_degraded: true` means an upstream
+    feed has most likely died, not that this API is unhealthy.
+
+    Both extra fields are read from in-process state ONLY. This endpoint makes
+    no database call at all -- that is deliberate and load-bearing: Render and
+    uptime monitors poll it on a schedule, and a query here would keep Neon's
+    free-tier compute from ever idling (the exact failure Phase 59 fixed).
+
+    Like "reaper", "pipeline" must NEVER change this endpoint's status code.
+    Conflating a degraded data feed with "the API is down" would recreate the
+    Phase 30 false-alarm outage, where a healthy backend was reported down.
     """
-    return {"status": "ok", "reaper": get_reaper_status()}
+    return {
+        "status": "ok",
+        "reaper": get_reaper_status(),
+        "pipeline": get_pipeline_status(),
+    }
 
 
 @router.get("/health/db")
